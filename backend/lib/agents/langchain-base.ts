@@ -1,11 +1,13 @@
 /**
  * LangChain Base Agent
  *
- * Abstract base class for all LangChain-powered agents (powered by Google Gemini)
+ * Abstract base class for all LangChain-powered agents.
+ * Uses OpenAI when OPEN_AI_API_KEY (or OPENAI_API_KEY) is set; otherwise Google Gemini.
  */
 
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
-import { StructuredOutputParser } from 'langchain/output_parsers';
+import { ChatOpenAI } from '@langchain/openai';
+import { StructuredOutputParser } from '@langchain/core/output_parsers';
 import { PromptTemplate } from '@langchain/core/prompts';
 import { RunnableSequence } from '@langchain/core/runnables';
 import type { UserProfile, FinancialAction, SimulationResult } from '../../types/financial.js';
@@ -25,7 +27,7 @@ export interface AgentContext {
 }
 
 export abstract class LangChainBaseAgent<TSchema extends z.ZodType> {
-  protected model: ChatGoogleGenerativeAI;
+  protected model: ChatGoogleGenerativeAI | ChatOpenAI;
   protected parser!: StructuredOutputParser<z.infer<TSchema>>;
 
   abstract readonly agentName: string;
@@ -33,20 +35,33 @@ export abstract class LangChainBaseAgent<TSchema extends z.ZodType> {
   abstract readonly systemPrompt: string;
 
   constructor(temperature: number) {
-    const apiKey = process.env.GOOGLE_API_KEY;
-    if (!apiKey) {
-      throw new Error('GOOGLE_API_KEY environment variable is required (get one at https://aistudio.google.com/apikey)');
+    const openAiKey = process.env.OPEN_AI_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim();
+    if (openAiKey) {
+      const modelName = process.env.OPENAI_MODEL?.trim() || 'gpt-4o-mini';
+      this.model = new ChatOpenAI({
+        model: modelName,
+        temperature,
+        apiKey: openAiKey,
+        maxTokens: 8192,
+        maxRetries: 1,
+      });
+      return;
     }
 
-    // Use gemini-1.5-flash as default (widely available and fast)
-    // Can override with GEMINI_MODEL env var (e.g., 'gemini-1.5-pro', 'gemini-2.0-flash')
-    const modelName = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
-    
+    const apiKey = process.env.GOOGLE_API_KEY;
+    if (!apiKey) {
+      throw new Error(
+        'No LLM API key found. Set OPEN_AI_API_KEY (or OPENAI_API_KEY) for OpenAI, or GOOGLE_API_KEY for Gemini (https://aistudio.google.com/apikey)'
+      );
+    }
+
+    const modelName = process.env.GEMINI_MODEL || 'gemini-2.0-flash-lite';
     this.model = new ChatGoogleGenerativeAI({
       model: modelName,
       temperature,
       apiKey,
-      maxOutputTokens: 8192, // Increased to prevent truncated JSON responses
+      maxOutputTokens: 8192,
+      maxRetries: 1,
     });
   }
 

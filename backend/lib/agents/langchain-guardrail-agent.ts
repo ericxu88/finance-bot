@@ -38,6 +38,11 @@ Critical violations that BLOCK:
 - Protected account modifications
 - Exceeding maximum thresholds
 
+CRITICAL RULE FOR min_balance:
+- A min_balance rule is violated ONLY when the "After Action" balance for that account is BELOW the threshold.
+- If "After Action" balance >= threshold, then that rule is NOT violated. Set violated = false and can_proceed = true for that rule.
+- Do NOT block based on "months of expenses", liquidity opinions, or other non-threshold criteria. Use only the exact numbers: After Action balance vs threshold.
+
 Warnings (don't block but flag):
 - Approaching limits (within 10% of threshold)
 - Patterns that might lead to future violations
@@ -80,21 +85,17 @@ PROPOSED ACTION:
 ${action.type.toUpperCase()} ${this.formatCurrency(action.amount)}
 
 YOUR TASK:
-For EACH guardrail rule:
-1. Check if it would be violated after this action
-2. If violated:
-   - Describe the violation precisely
-   - State current value vs. threshold
-   - Assign severity (critical/high/medium/low)
-   - Suggest how to adjust the action to comply
-3. Also check for warnings (getting close to limits)
+For EACH guardrail rule, use ONLY the numbers above:
+1. For min_balance: Compare "After Action" balance for that account to the threshold. Violated ONLY if After Action < threshold.
+2. If violated: describe precisely, state current value vs threshold, assign severity, suggest adjustment.
+3. Also check for warnings (getting close to limits).
 
 Determine:
-- violated: true if ANY rule is broken
-- can_proceed: false if ANY critical/high severity violations exist
-- List ALL violations and warnings found
+- violated: true ONLY if some rule's numeric condition is broken (e.g. After Action checking < $1,000 for a $1,000 min).
+- can_proceed: false ONLY when violated is true for a blocking rule.
+- If all "After Action" balances meet or exceed their min_balance thresholds, then violated = false and can_proceed = true.
 
-Be thorough and precise.
+Be precise: use the exact "After Action" numbers from above, not months of expenses or opinions.
     `.trim();
   }
 
