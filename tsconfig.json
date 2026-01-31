@@ -2,13 +2,15 @@
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
-    "lib": ["ES2022"],
+    "lib": [
+      "ES2022"
+    ],
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "allowJs": true,
     "checkJs": false,
     "outDir": "./dist",
-    "rootDir": "./",
+    "rootDir": "./backend",
     "removeComments": true,
     "strict": true,
     "noImplicitAny": true,
@@ -32,14 +34,11 @@
     "sourceMap": true
   },
   "include": [
-    "types/**/*",
-    "lib/**/*",
-    "scripts/**/*",
-    "src/**/*",
-    "validate-types.ts"
+    "backend/**/*"
   ],
   "exclude": [
     "node_modules",
-    "dist"
+    "dist",
+    "frontend"
   ]
 }

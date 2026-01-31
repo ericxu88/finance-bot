@@ -111,7 +111,7 @@ orchestrator.processDecision({
   console.log('='.repeat(60));
   
   // Test that OpenAPI spec exists and is valid
-  const specPath = path.join(process.cwd(), 'api', 'openapi.yaml');
+  const specPath = path.join(process.cwd(), 'backend', 'api', 'openapi.yaml');
   if (!fs.existsSync(specPath)) {
     console.log('❌ OpenAPI spec file not found');
     process.exit(1);

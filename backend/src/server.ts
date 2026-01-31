@@ -210,7 +210,7 @@ app.get('/sample', (_req: Request, res: Response) => {
 app.get('/api-docs', (_req: Request, res: Response) => {
   // Return OpenAPI spec as JSON
   try {
-    const specPath = path.join(process.cwd(), 'api', 'openapi.yaml');
+    const specPath = path.join(process.cwd(), 'backend', 'api', 'openapi.yaml');
     const specContent = fs.readFileSync(specPath, 'utf8');
     const spec = yaml.load(specContent);
     res.status(200).json(spec);
