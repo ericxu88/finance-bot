@@ -106,6 +106,14 @@ npm run type-check
 npm run build
 ```
 
+### Run All Tests
+
+```bash
+npm run test
+```
+
+This builds the project and runs the simulation engine test suite (`lib/__tests__/simulation-engine.test.ts`).
+
 ## 🔧 Usage Examples
 
 ### Import Types
@@ -132,15 +140,9 @@ console.log(`Total Assets: $${
 }`);
 ```
 
-## 📋 Next Steps
+## 📋 Project Scope
 
-With the type system in place, the next chunks will build:
-
-1. **Simulation Engine** - Calculate financial outcomes
-2. **Agent System** - Multi-agent analysis framework
-3. **Validation Engine** - Constraint checking and confidence scoring
-4. **API Layer** - REST/GraphQL endpoints
-5. **Frontend** - User interface for comparisons
+This repo is **backend-only**: types, simulation engine, demo data, and scripts. No frontend or HTTP server.
 
 ## 🎓 Type Design Principles
 

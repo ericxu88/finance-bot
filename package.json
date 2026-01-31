@@ -7,6 +7,7 @@
     "type-check": "tsc --noEmit",
     "build": "tsc",
     "dev": "tsc --watch",
+    "test": "npm run build && node dist/lib/__tests__/simulation-engine.test.js",
     "validate": "tsc --noEmit && node --loader ts-node/esm validate-types.ts"
   },
   "keywords": [
@@ -15,6 +16,9 @@
     "decision-making",
     "hackathon"
   ],
+  "dependencies": {
+    "date-fns": "^3.6.0"
+  },
   "devDependencies": {
     "typescript": "^5.3.3",
     "@types/node": "^20.10.0"
