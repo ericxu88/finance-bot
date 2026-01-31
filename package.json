@@ -8,6 +8,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "npm run build && node dist/lib/__tests__/simulation-engine.test.js",
+    "demo:agents": "npm run build && node dist/scripts/demo-langchain-agents.js",
     "validate": "tsc --noEmit && node --loader ts-node/esm validate-types.ts"
   },
   "keywords": [
@@ -17,7 +18,12 @@
     "hackathon"
   ],
   "dependencies": {
-    "date-fns": "^3.6.0"
+    "date-fns": "^3.6.0",
+    "langchain": "^0.3.0",
+    "@langchain/google-genai": "^0.2.0",
+    "@langchain/core": "^0.3.0",
+    "zod": "^3.23.8",
+    "zod-to-json-schema": "^3.23.0"
   },
   "devDependencies": {
     "typescript": "^5.3.3",

@@ -94,6 +94,16 @@ The sample includes a complete simulation showing:
 npm install
 ```
 
+### Environment Setup
+
+```bash
+# Copy example env file
+cp .env.example .env
+
+# Add your Google API key (get one at https://aistudio.google.com/apikey)
+export GOOGLE_API_KEY=your_key_here
+```
+
 ### Type Check
 
 ```bash
@@ -113,6 +123,14 @@ npm run test
 ```
 
 This builds the project and runs the simulation engine test suite (`lib/__tests__/simulation-engine.test.ts`).
+
+### Run LangChain Multi-Agent Demo
+
+```bash
+npm run demo:agents
+```
+
+Runs a complete multi-agent analysis using Google Gemini via LangChain. Requires `GOOGLE_API_KEY`.
 
 ## 🔧 Usage Examples
 
@@ -142,7 +160,49 @@ console.log(`Total Assets: $${
 
 ## 📋 Project Scope
 
-This repo is **backend-only**: types, simulation engine, demo data, and scripts. No frontend or HTTP server.
+This repo is **backend-only**: types, simulation engine, demo data, LangChain multi-agent system, and scripts. No frontend or HTTP server.
+
+### Key Components
+
+1. **Type System** (`/types/`) - 18 comprehensive TypeScript interfaces
+2. **Simulation Engine** (`/lib/simulation-engine.ts`) - Pure functions for financial calculations
+3. **Demo Data** (`/lib/demo-users.ts`) - 3 realistic user personas with transaction history
+4. **LangChain Agents** (`/lib/agents/`) - Multi-agent AI system with Google Gemini
+   - Budgeting Agent - Cash flow & liquidity analysis
+   - Investment Agent - Goal alignment & risk assessment
+   - Guardrail Agent - Compliance checking
+   - Validation Agent - Meta-analysis & consensus
+
+---
+
+## 🤖 Multi-Agent Architecture
+
+See **`LANGCHAIN-AGENTS.md`** for complete documentation.
+
+The LangChain multi-agent system provides AI-powered financial decision analysis:
+
+```
+User Action → Simulation → Multi-Agent Analysis → Recommendation
+                              ↓
+                    ┌─────────┬─────────┬──────────┐
+                    │Budgeting│Investment│Guardrail│
+                    │  Agent  │  Agent   │  Agent  │
+                    └─────────┴─────────┴──────────┘
+                              ↓
+                         Validation
+                            Agent
+                              ↓
+                    Final Recommendation
+```
+
+**Features:**
+- Structured outputs via Zod schemas
+- Parallel agent execution
+- Contradiction detection
+- Data quality assessment
+- Production-grade error handling
+
+**Run demo:** `npm run demo:agents`
 
 ## 🎓 Type Design Principles
 
