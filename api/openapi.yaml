@@ -1,0 +1,1279 @@
+openapi: 3.0.3
+info:
+  title: Finance Bot API
+  description: |
+    Intelligent financial decision simulation platform with multi-agent AI analysis.
+    
+    This API provides endpoints for:
+    - Financial action simulation (save, invest, spend)
+    - Multi-action comparison
+    - AI-powered agent analysis
+    - Sample user data
+  version: 1.0.0
+  contact:
+    name: Finance Bot Team
+
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+  - url: https://api.example.com
+    description: Production server (example)
+
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Returns API health status
+      operationId: getHealth
+      tags:
+        - Health
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /sample:
+    get:
+      summary: Get sample user data
+      description: Returns a sample UserProfile for testing and demos
+      operationId: getSampleUser
+      tags:
+        - Sample Data
+      responses:
+        '200':
+          description: Sample user data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+
+  /simulate:
+    post:
+      summary: Simulate a financial action
+      description: |
+        Simulates a single financial action (save, invest, or spend) and returns
+        the projected outcomes including account balances, goal impacts, and budget effects.
+      operationId: simulateAction
+      tags:
+        - Simulation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SimulateRequest'
+            examples:
+              save:
+                summary: Save $500 to emergency fund
+                value:
+                  user:
+                    $ref: '#/components/examples/sampleUser'
+                  action:
+                    type: save
+                    amount: 500
+                    goalId: goal_emergency
+              invest:
+                summary: Invest $500 in taxable account
+                value:
+                  user:
+                    $ref: '#/components/examples/sampleUser'
+                  action:
+                    type: invest
+                    amount: 500
+                    targetAccountId: taxable
+                    goalId: goal_house
+                    timeHorizon: 5
+              spend:
+                summary: Spend $100 on groceries
+                value:
+                  user:
+                    $ref: '#/components/examples/sampleUser'
+                  action:
+                    type: spend
+                    amount: 100
+                    category: cat_groceries
+      responses:
+        '200':
+          description: Simulation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationResult'
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /compare:
+    post:
+      summary: Compare multiple financial actions
+      description: |
+        Simulates multiple financial actions side-by-side and returns comparison
+        results for easy decision-making.
+      operationId: compareActions
+      tags:
+        - Simulation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompareRequest'
+            example:
+              user:
+                $ref: '#/components/examples/sampleUser'
+              options:
+                - type: save
+                  amount: 500
+                  goalId: goal_emergency
+                - type: invest
+                  amount: 500
+                  targetAccountId: taxable
+                  goalId: goal_house
+                - type: spend
+                  amount: 500
+                  category: cat_dining
+      responses:
+        '200':
+          description: Array of simulation results for comparison
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SimulationResult'
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /analyze:
+    post:
+      summary: Analyze action with AI agents
+      description: |
+        Runs a financial simulation and then analyzes it using multi-agent AI system.
+        Returns both simulation results and AI-powered recommendations from budgeting,
+        investment, guardrail, and validation agents.
+      operationId: analyzeAction
+      tags:
+        - Analysis
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SimulateRequest'
+            examples:
+              invest_analysis:
+                summary: Analyze $500 investment
+                value:
+                  user:
+                    $ref: '#/components/examples/sampleUser'
+                  action:
+                    type: invest
+                    amount: 500
+                    targetAccountId: taxable
+                    goalId: goal_house
+      responses:
+        '200':
+          description: Combined simulation and analysis results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisResponse'
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Analysis failed (e.g., agent error)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /demo/scenarios:
+    get:
+      summary: Get all demo scenarios
+      description: |
+        Returns pre-built demo scenarios for hackathon presentations.
+        Each scenario includes a user persona, their financial situation,
+        and suggested actions to demonstrate the platform's capabilities.
+      operationId: getDemoScenarios
+      tags:
+        - Demo
+      responses:
+        '200':
+          description: List of demo scenarios
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DemoScenariosResponse'
+
+  /demo/scenarios/{id}:
+    get:
+      summary: Get a specific demo scenario by ID
+      description: Returns a single demo scenario with full user profile and suggested actions.
+      operationId: getDemoScenarioById
+      tags:
+        - Demo
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Scenario ID (young_professional, experienced_investor, conservative_saver)
+          schema:
+            type: string
+            enum: [young_professional, experienced_investor, conservative_saver]
+      responses:
+        '200':
+          description: Demo scenario details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DemoScenario'
+        '404':
+          description: Scenario not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /goals/summary:
+    post:
+      summary: Get detailed goal progress summary
+      description: |
+        Returns a comprehensive summary of all financial goals including progress,
+        status, projections, and suggested actions for each goal.
+      operationId: getGoalsSummary
+      tags:
+        - Goals
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoalsSummaryRequest'
+      responses:
+        '200':
+          description: Goal summary with progress and projections
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoalsSummaryResponse'
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Goal summary generation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /recommend:
+    post:
+      summary: Get AI-powered financial recommendations
+      description: |
+        Analyzes the user's financial state, goals, and priorities to generate
+        personalized action recommendations. Optionally evaluates recommendations
+        with the multi-agent AI system for deeper analysis.
+      operationId: getRecommendations
+      tags:
+        - Analysis
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecommendRequest'
+            example:
+              user:
+                $ref: '#/components/examples/sampleUser'
+              evaluateWithAgents: false
+      responses:
+        '200':
+          description: Financial health analysis and recommendations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendResponse'
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Recommendation generation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    UserProfile:
+      type: object
+      required:
+        - id
+        - name
+        - monthlyIncome
+        - accounts
+        - fixedExpenses
+        - spendingCategories
+        - goals
+        - preferences
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          example: user_123
+        name:
+          type: string
+          example: John Doe
+        monthlyIncome:
+          type: number
+          minimum: 0
+          example: 5000
+        accounts:
+          $ref: '#/components/schemas/Accounts'
+        fixedExpenses:
+          type: array
+          items:
+            $ref: '#/components/schemas/FixedExpense'
+        spendingCategories:
+          type: array
+          items:
+            $ref: '#/components/schemas/SpendingCategory'
+        goals:
+          type: array
+          items:
+            $ref: '#/components/schemas/FinancialGoal'
+        preferences:
+          $ref: '#/components/schemas/UserPreferences'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Accounts:
+      type: object
+      required:
+        - checking
+        - savings
+        - investments
+      properties:
+        checking:
+          type: number
+          minimum: 0
+          example: 3000
+        savings:
+          type: number
+          minimum: 0
+          example: 8000
+        investments:
+          $ref: '#/components/schemas/InvestmentAccounts'
+
+    InvestmentAccounts:
+      type: object
+      required:
+        - taxable
+        - rothIRA
+        - traditional401k
+      properties:
+        taxable:
+          type: number
+          minimum: 0
+          example: 5000
+        rothIRA:
+          type: number
+          minimum: 0
+          example: 12000
+        traditional401k:
+          type: number
+          minimum: 0
+          example: 28000
+
+    FixedExpense:
+      type: object
+      required:
+        - id
+        - name
+        - amount
+        - frequency
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          example: Rent
+        amount:
+          type: number
+          minimum: 0
+          example: 1500
+        frequency:
+          type: string
+          enum: [monthly, annual]
+        dueDay:
+          type: integer
+          minimum: 1
+          maximum: 31
+          example: 1
+
+    SpendingCategory:
+      type: object
+      required:
+        - id
+        - name
+        - monthlyBudget
+        - currentSpent
+        - transactions
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          example: Groceries
+        monthlyBudget:
+          type: number
+          minimum: 0
+          example: 400
+        currentSpent:
+          type: number
+          minimum: 0
+          example: 280
+        transactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Transaction'
+
+    Transaction:
+      type: object
+      required:
+        - id
+        - date
+        - amount
+        - category
+        - description
+        - type
+      properties:
+        id:
+          type: string
+        date:
+          type: string
+          format: date-time
+        amount:
+          type: number
+          description: Positive for income, negative for expenses
+          example: -45.50
+        category:
+          type: string
+          example: cat_groceries
+        description:
+          type: string
+          example: Whole Foods
+        type:
+          type: string
+          enum: [expense, income, transfer]
+
+    FinancialGoal:
+      type: object
+      required:
+        - id
+        - name
+        - targetAmount
+        - currentAmount
+        - deadline
+        - priority
+        - timeHorizon
+        - linkedAccountIds
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          example: Emergency Fund
+        targetAmount:
+          type: number
+          minimum: 0
+          example: 15000
+        currentAmount:
+          type: number
+          minimum: 0
+          example: 8000
+        deadline:
+          type: string
+          format: date-time
+        priority:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: 1 = highest priority
+          example: 1
+        timeHorizon:
+          type: string
+          enum: [short, medium, long]
+          description: short < 2yr, medium 2-5yr, long 5yr+
+        linkedAccountIds:
+          type: array
+          items:
+            type: string
+          example: [savings]
+
+    UserPreferences:
+      type: object
+      required:
+        - riskTolerance
+        - liquidityPreference
+        - guardrails
+      properties:
+        riskTolerance:
+          type: string
+          enum: [conservative, moderate, aggressive]
+        liquidityPreference:
+          type: string
+          enum: [high, medium, low]
+        guardrails:
+          type: array
+          items:
+            $ref: '#/components/schemas/Guardrail'
+
+    Guardrail:
+      type: object
+      required:
+        - id
+        - rule
+        - type
+      properties:
+        id:
+          type: string
+        rule:
+          type: string
+          example: Never let checking drop below $1,000
+        type:
+          type: string
+          enum: [min_balance, max_investment_pct, protected_account]
+        accountId:
+          type: string
+          example: checking
+        threshold:
+          type: number
+          example: 1000
+
+    FinancialAction:
+      oneOf:
+        - $ref: '#/components/schemas/SaveAction'
+        - $ref: '#/components/schemas/InvestAction'
+        - $ref: '#/components/schemas/SpendAction'
+      discriminator:
+        propertyName: type
+
+    SaveAction:
+      type: object
+      required:
+        - type
+        - amount
+      properties:
+        type:
+          type: string
+          enum: [save]
+        amount:
+          type: number
+          minimum: 0.01
+          example: 500
+        goalId:
+          type: string
+          example: goal_emergency
+
+    InvestAction:
+      type: object
+      required:
+        - type
+        - amount
+        - targetAccountId
+      properties:
+        type:
+          type: string
+          enum: [invest]
+        amount:
+          type: number
+          minimum: 0.01
+          example: 500
+        targetAccountId:
+          type: string
+          enum: [taxable, rothIRA, traditional401k]
+        goalId:
+          type: string
+          example: goal_house
+        timeHorizon:
+          type: integer
+          minimum: 1
+          maximum: 100
+          description: Years to project growth
+          default: 5
+          example: 5
+
+    SpendAction:
+      type: object
+      required:
+        - type
+        - amount
+        - category
+      properties:
+        type:
+          type: string
+          enum: [spend]
+        amount:
+          type: number
+          minimum: 0.01
+          example: 100
+        category:
+          type: string
+          example: cat_groceries
+
+    SimulateRequest:
+      type: object
+      required:
+        - user
+        - action
+      properties:
+        user:
+          $ref: '#/components/schemas/UserProfile'
+        action:
+          $ref: '#/components/schemas/FinancialAction'
+
+    CompareRequest:
+      type: object
+      required:
+        - user
+        - options
+      properties:
+        user:
+          $ref: '#/components/schemas/UserProfile'
+        options:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/FinancialAction'
+
+    SimulationResult:
+      type: object
+      required:
+        - action
+        - scenarioIfDo
+        - scenarioIfDont
+        - confidence
+        - reasoning
+        - validationResult
+      properties:
+        action:
+          $ref: '#/components/schemas/FinancialAction'
+        scenarioIfDo:
+          $ref: '#/components/schemas/Scenario'
+        scenarioIfDont:
+          $ref: '#/components/schemas/Scenario'
+        confidence:
+          type: string
+          enum: [high, medium, low]
+        reasoning:
+          type: string
+        validationResult:
+          $ref: '#/components/schemas/ValidationResult'
+
+    Scenario:
+      type: object
+      required:
+        - accountsAfter
+        - goalImpacts
+        - budgetImpacts
+        - liquidityImpact
+        - riskImpact
+        - timelineChanges
+      properties:
+        accountsAfter:
+          $ref: '#/components/schemas/Accounts'
+        goalImpacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/GoalImpact'
+        budgetImpacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/BudgetImpact'
+        liquidityImpact:
+          type: string
+        riskImpact:
+          type: string
+        timelineChanges:
+          type: array
+          items:
+            type: string
+
+    GoalImpact:
+      type: object
+      required:
+        - goalId
+        - goalName
+        - progressChangePct
+        - timeToGoalBefore
+        - timeToGoalAfter
+        - timeSaved
+      properties:
+        goalId:
+          type: string
+        goalName:
+          type: string
+        progressChangePct:
+          type: number
+          description: Percentage change in goal progress
+        timeToGoalBefore:
+          type: number
+          description: Months to goal before action
+        timeToGoalAfter:
+          type: number
+          description: Months to goal after action
+        timeSaved:
+          type: number
+          description: Months saved (negative = slower)
+        futureValue:
+          type: number
+          description: Projected future value (for investments)
+
+    BudgetImpact:
+      type: object
+      required:
+        - categoryId
+        - categoryName
+        - percentUsed
+        - amountRemaining
+        - status
+      properties:
+        categoryId:
+          type: string
+        categoryName:
+          type: string
+        percentUsed:
+          type: number
+          minimum: 0
+        amountRemaining:
+          type: number
+        status:
+          type: string
+          enum: [under, good, warning, over]
+
+    ValidationResult:
+      type: object
+      required:
+        - passed
+        - constraintViolations
+        - contradictions
+        - uncertaintySources
+        - overallConfidence
+      properties:
+        passed:
+          type: boolean
+        constraintViolations:
+          type: array
+          items:
+            type: string
+        contradictions:
+          type: array
+          items:
+            type: string
+        uncertaintySources:
+          type: array
+          items:
+            type: string
+        overallConfidence:
+          type: string
+          enum: [high, medium, low]
+        alternativeIfUncertain:
+          type: string
+
+    AnalysisResponse:
+      type: object
+      required:
+        - simulation
+        - analysis
+        - metadata
+      properties:
+        simulation:
+          $ref: '#/components/schemas/SimulationResult'
+        analysis:
+          $ref: '#/components/schemas/AgentAnalysisResult'
+        metadata:
+          $ref: '#/components/schemas/AnalysisMetadata'
+
+    AgentAnalysisResult:
+      type: object
+      required:
+        - budgetingAnalysis
+        - investmentAnalysis
+        - guardrailAnalysis
+        - validationAnalysis
+        - finalRecommendation
+        - overallConfidence
+        - shouldProceed
+        - executionTime
+      properties:
+        budgetingAnalysis:
+          type: object
+          description: Budgeting agent analysis output
+        investmentAnalysis:
+          type: object
+          description: Investment agent analysis output
+        guardrailAnalysis:
+          type: object
+          description: Guardrail agent analysis output
+        validationAnalysis:
+          type: object
+          description: Validation agent meta-analysis output
+        finalRecommendation:
+          type: string
+          description: Human-readable final recommendation
+        overallConfidence:
+          type: string
+          enum: [high, medium, low, very_low]
+        shouldProceed:
+          type: boolean
+          description: Whether the action should proceed
+        executionTime:
+          type: integer
+          description: Analysis execution time in milliseconds
+
+    AnalysisMetadata:
+      type: object
+      required:
+        - usedMockAgents
+        - timestamp
+      properties:
+        usedMockAgents:
+          type: boolean
+          description: Whether mock agents were used (true if no API key)
+        timestamp:
+          type: string
+          format: date-time
+
+    DemoScenariosResponse:
+      type: object
+      required:
+        - scenarios
+        - metadata
+      properties:
+        scenarios:
+          type: array
+          items:
+            $ref: '#/components/schemas/DemoScenario'
+        metadata:
+          type: object
+          properties:
+            totalScenarios:
+              type: integer
+            timestamp:
+              type: string
+              format: date-time
+
+    DemoScenario:
+      type: object
+      required:
+        - id
+        - name
+        - persona
+        - description
+        - highlights
+        - user
+        - suggestedActions
+      properties:
+        id:
+          type: string
+          example: young_professional
+        name:
+          type: string
+          example: Sarah Chen - Young Professional
+        persona:
+          type: string
+          example: 28yo Software Engineer
+        description:
+          type: string
+        highlights:
+          type: array
+          items:
+            type: string
+          example:
+            - Building emergency fund (53% complete)
+            - Saving for house down payment
+        user:
+          $ref: '#/components/schemas/UserProfile'
+        suggestedActions:
+          type: array
+          items:
+            $ref: '#/components/schemas/SuggestedAction'
+
+    SuggestedAction:
+      type: object
+      required:
+        - id
+        - description
+        - action
+        - expectedOutcome
+      properties:
+        id:
+          type: string
+        description:
+          type: string
+          example: Save $500 to emergency fund
+        action:
+          $ref: '#/components/schemas/FinancialAction'
+        expectedOutcome:
+          type: string
+          example: Reach emergency fund goal 2 months faster
+
+    GoalsSummaryRequest:
+      type: object
+      required:
+        - user
+      properties:
+        user:
+          $ref: '#/components/schemas/UserProfile'
+
+    GoalsSummaryResponse:
+      type: object
+      required:
+        - summary
+        - goals
+        - metadata
+      properties:
+        summary:
+          $ref: '#/components/schemas/GoalsAggregate'
+        goals:
+          type: array
+          items:
+            $ref: '#/components/schemas/GoalDetail'
+        metadata:
+          type: object
+          properties:
+            timestamp:
+              type: string
+              format: date-time
+
+    GoalsAggregate:
+      type: object
+      required:
+        - totalGoals
+        - goalsOnTrack
+        - goalsBehind
+        - goalsAtRisk
+        - goalsCompleted
+        - totalTargeted
+        - totalSaved
+        - overallProgress
+        - monthlySurplus
+      properties:
+        totalGoals:
+          type: integer
+        goalsOnTrack:
+          type: integer
+        goalsBehind:
+          type: integer
+        goalsAtRisk:
+          type: integer
+        goalsCompleted:
+          type: integer
+        totalTargeted:
+          type: number
+          description: Total amount targeted across all goals
+        totalSaved:
+          type: number
+          description: Total amount saved across all goals
+        overallProgress:
+          type: number
+          description: Overall progress percentage (0-100)
+        monthlySurplus:
+          type: number
+          description: Available monthly surplus for saving
+
+    GoalDetail:
+      type: object
+      required:
+        - goalId
+        - goalName
+        - targetAmount
+        - currentAmount
+        - remainingAmount
+        - progress
+        - deadline
+        - monthsRemaining
+        - timeHorizon
+        - priority
+        - status
+        - monthlyNeeded
+        - projectedCompletion
+      properties:
+        goalId:
+          type: string
+        goalName:
+          type: string
+        targetAmount:
+          type: number
+        currentAmount:
+          type: number
+        remainingAmount:
+          type: number
+        progress:
+          type: number
+          description: Progress percentage (0-100)
+        deadline:
+          type: string
+          format: date-time
+        monthsRemaining:
+          type: integer
+        timeHorizon:
+          type: string
+          enum: [short, medium, long]
+        priority:
+          type: integer
+          minimum: 1
+          maximum: 5
+        status:
+          type: string
+          enum: [on_track, behind, at_risk, completed]
+        monthlyNeeded:
+          type: number
+          description: Monthly amount needed to reach goal on time
+        projectedCompletion:
+          type: string
+          description: Human-readable projection (e.g., "On time", "2 months late")
+        suggestedAction:
+          type: object
+          nullable: true
+          properties:
+            action:
+              $ref: '#/components/schemas/FinancialAction'
+            reasoning:
+              type: string
+
+    RecommendRequest:
+      type: object
+      required:
+        - user
+      properties:
+        user:
+          $ref: '#/components/schemas/UserProfile'
+        evaluateWithAgents:
+          type: boolean
+          description: Whether to evaluate recommendations with AI agents (slower but more thorough)
+          default: false
+
+    RecommendResponse:
+      type: object
+      required:
+        - financialHealth
+        - recommendations
+        - metadata
+      properties:
+        financialHealth:
+          $ref: '#/components/schemas/FinancialHealth'
+        recommendations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Recommendation'
+        metadata:
+          $ref: '#/components/schemas/RecommendMetadata'
+
+    FinancialHealth:
+      type: object
+      required:
+        - overallHealth
+        - monthlySurplus
+        - emergencyFundStatus
+        - goalProgress
+      properties:
+        overallHealth:
+          type: string
+          enum: [excellent, good, fair, needs_attention]
+        monthlySurplus:
+          type: number
+          description: Monthly income minus expenses
+        emergencyFundStatus:
+          type: string
+          enum: [adequate, low, missing]
+        goalProgress:
+          type: array
+          items:
+            $ref: '#/components/schemas/GoalProgress'
+
+    GoalProgress:
+      type: object
+      required:
+        - goalId
+        - goalName
+        - progress
+        - onTrack
+      properties:
+        goalId:
+          type: string
+        goalName:
+          type: string
+        progress:
+          type: number
+          description: Progress percentage (0-100)
+        onTrack:
+          type: boolean
+          description: Whether goal is on track to meet deadline
+
+    Recommendation:
+      type: object
+      required:
+        - action
+        - priority
+        - reasoning
+        - estimatedImpact
+      properties:
+        action:
+          $ref: '#/components/schemas/FinancialAction'
+        priority:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: 1 = highest priority
+        reasoning:
+          type: string
+          description: Human-readable explanation of why this is recommended
+        timeHorizon:
+          type: integer
+          description: Years to project (for invest actions)
+        goalImpact:
+          $ref: '#/components/schemas/GoalImpact'
+        estimatedImpact:
+          $ref: '#/components/schemas/EstimatedImpact'
+        agentAnalysis:
+          type: object
+          description: Agent analysis result (if evaluateWithAgents=true)
+          nullable: true
+        agentScore:
+          type: integer
+          description: Agent evaluation score (1-5, if evaluated)
+          nullable: true
+
+    EstimatedImpact:
+      type: object
+      required:
+        - liquidityImpact
+        - riskImpact
+        - timelineBenefit
+      properties:
+        liquidityImpact:
+          type: string
+        riskImpact:
+          type: string
+        timelineBenefit:
+          type: string
+
+    RecommendMetadata:
+      type: object
+      required:
+        - totalRecommendations
+        - evaluatedWithAgents
+        - timestamp
+      properties:
+        totalRecommendations:
+          type: integer
+        evaluatedWithAgents:
+          type: boolean
+        timestamp:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+        details:
+          type: object
+          description: Validation error details (if applicable)
+        message:
+          type: string
+          description: Error message (for 500 errors)
+
+  examples:
+    sampleUser:
+      value:
+        id: user_sarah_demo
+        name: Sarah
+        monthlyIncome: 5000
+        accounts:
+          checking: 3000
+          savings: 8000
+          investments:
+            taxable: 5000
+            rothIRA: 0
+            traditional401k: 0
+        fixedExpenses:
+          - id: exp_rent
+            name: Rent
+            amount: 1500
+            frequency: monthly
+            dueDay: 1
+        spendingCategories:
+          - id: cat_groceries
+            name: Groceries
+            monthlyBudget: 400
+            currentSpent: 0
+            transactions: []
+        goals:
+          - id: goal_emergency
+            name: Emergency Fund
+            targetAmount: 15000
+            currentAmount: 8000
+            deadline: '2027-01-31T00:00:00Z'
+            priority: 1
+            timeHorizon: short
+            linkedAccountIds: [savings]
+        preferences:
+          riskTolerance: moderate
+          liquidityPreference: medium
+          guardrails:
+            - id: guard_checking_min
+              rule: Never let checking drop below $1,000
+              type: min_balance
+              accountId: checking
+              threshold: 1000
+        createdAt: '2026-01-01T00:00:00Z'
+        updatedAt: '2026-01-31T00:00:00Z'
+
+tags:
+  - name: Health
+    description: Health check endpoints
+  - name: Sample Data
+    description: Sample data for testing
+  - name: Simulation
+    description: Financial action simulation
+  - name: Goals
+    description: Goal tracking and progress
+  - name: Analysis
+    description: AI-powered agent analysis and recommendations
+  - name: Demo
+    description: Pre-built demo scenarios for presentations

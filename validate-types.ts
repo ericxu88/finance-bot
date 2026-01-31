@@ -7,18 +7,15 @@
 
 import type {
   UserProfile,
-  FinancialAction,
   SimulationResult,
-  ComparisonOption,
-  AgentOutput,
-} from './types/financial';
+} from './types/financial.js';
 
 import {
   sampleUserSarah,
   sampleAction,
   sampleSimulationResult,
   sampleComparisonOptions,
-} from './types/sample-data';
+} from './types/sample-data.js';
 
 // ============================================================================
 // VALIDATION FUNCTIONS

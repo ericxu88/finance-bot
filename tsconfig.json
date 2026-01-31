@@ -34,7 +34,9 @@
   "include": [
     "types/**/*",
     "lib/**/*",
-    "scripts/**/*"
+    "scripts/**/*",
+    "src/**/*",
+    "validate-types.ts"
   ],
   "exclude": [
     "node_modules",

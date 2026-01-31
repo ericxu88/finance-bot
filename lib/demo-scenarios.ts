@@ -1,0 +1,236 @@
+/**
+ * Demo Scenarios
+ * 
+ * Pre-built scenarios for hackathon demos and presentations
+ */
+
+import type { UserProfile, FinancialAction } from '../types/financial.js';
+import { sarah, marcus, elena } from './demo-users.js';
+
+export interface SuggestedAction {
+  id: string;
+  description: string;
+  action: FinancialAction;
+  expectedOutcome: string;
+}
+
+export interface DemoScenario {
+  id: string;
+  name: string;
+  persona: string;
+  description: string;
+  highlights: string[];
+  user: UserProfile;
+  suggestedActions: SuggestedAction[];
+}
+
+/**
+ * Sarah's demo scenario - Young professional building wealth
+ */
+const sarahScenario: DemoScenario = {
+  id: 'young_professional',
+  name: 'Sarah Chen - Young Professional',
+  persona: '28yo Software Engineer',
+  description: 'Early-career professional focused on building emergency fund and saving for first home. Has moderate risk tolerance and wants to balance saving with enjoying life.',
+  highlights: [
+    'Building emergency fund (53% complete)',
+    'Saving for house down payment (5 year goal)',
+    'Planning a Europe vacation',
+    'Moderate risk tolerance',
+  ],
+  user: sarah,
+  suggestedActions: [
+    {
+      id: 'sarah_emergency',
+      description: 'Save $500 to emergency fund',
+      action: {
+        type: 'save',
+        amount: 500,
+        goalId: 'goal_emergency',
+      },
+      expectedOutcome: 'Reach emergency fund goal 2 months faster',
+    },
+    {
+      id: 'sarah_invest_house',
+      description: 'Invest $500 for house down payment',
+      action: {
+        type: 'invest',
+        amount: 500,
+        targetAccountId: 'taxable',
+        goalId: 'goal_house',
+      },
+      expectedOutcome: 'Projected growth to $750+ over 5 years',
+    },
+    {
+      id: 'sarah_vacation',
+      description: 'Save $300 for Europe vacation',
+      action: {
+        type: 'save',
+        amount: 300,
+        goalId: 'goal_vacation',
+      },
+      expectedOutcome: 'Stay on track for 8-month deadline',
+    },
+    {
+      id: 'sarah_dining',
+      description: 'Spend $75 on nice dinner',
+      action: {
+        type: 'spend',
+        amount: 75,
+        category: 'cat_dining',
+      },
+      expectedOutcome: 'Stays within dining budget (56% used)',
+    },
+  ],
+};
+
+/**
+ * Marcus's demo scenario - Experienced investor growing wealth
+ */
+const marcusScenario: DemoScenario = {
+  id: 'experienced_investor',
+  name: 'Marcus Johnson - Experienced Investor',
+  persona: '42yo Consultant, Family Man',
+  description: 'Mid-career professional with aggressive investment strategy. Focused on retirement and kids\' college funds while maintaining home.',
+  highlights: [
+    '$158K retirement portfolio (16% of goal)',
+    'Kids\' college fund ($45K saved)',
+    'Home renovation project in 2 years',
+    'Aggressive risk tolerance',
+  ],
+  user: marcus,
+  suggestedActions: [
+    {
+      id: 'marcus_401k',
+      description: 'Max out 401k contribution ($1,500)',
+      action: {
+        type: 'invest',
+        amount: 1500,
+        targetAccountId: 'traditional401k',
+        goalId: 'goal_retirement',
+      },
+      expectedOutcome: 'Tax-deferred growth, reduce taxable income',
+    },
+    {
+      id: 'marcus_college',
+      description: 'Invest $800 for college fund',
+      action: {
+        type: 'invest',
+        amount: 800,
+        targetAccountId: 'taxable',
+        goalId: 'goal_college',
+      },
+      expectedOutcome: 'Projected to grow significantly over 15 years',
+    },
+    {
+      id: 'marcus_renovation',
+      description: 'Save $500 for home renovation',
+      action: {
+        type: 'save',
+        amount: 500,
+        goalId: 'goal_home_improvement',
+      },
+      expectedOutcome: 'On track for 2-year renovation budget',
+    },
+    {
+      id: 'marcus_splurge',
+      description: 'Spend $200 on family entertainment',
+      action: {
+        type: 'spend',
+        amount: 200,
+        category: 'cat_entertainment',
+      },
+      expectedOutcome: 'Within entertainment budget (70% used)',
+    },
+  ],
+};
+
+/**
+ * Elena's demo scenario - Conservative saver with debt
+ */
+const elenaScenario: DemoScenario = {
+  id: 'conservative_saver',
+  name: 'Elena Rodriguez - Conservative Saver',
+  persona: '35yo Teacher, Debt-Conscious',
+  description: 'Careful saver prioritizing financial security and paying off student loans. Conservative approach with focus on liquidity and emergency fund.',
+  highlights: [
+    'Emergency fund priority (67% complete)',
+    'Paying off $25K student loans',
+    'Saving for reliable car',
+    'Conservative risk tolerance',
+  ],
+  user: elena,
+  suggestedActions: [
+    {
+      id: 'elena_emergency',
+      description: 'Save $400 to emergency fund',
+      action: {
+        type: 'save',
+        amount: 400,
+        goalId: 'goal_emergency',
+      },
+      expectedOutcome: 'Complete emergency fund in 15 months',
+    },
+    {
+      id: 'elena_debt',
+      description: 'Extra $200 toward student loans',
+      action: {
+        type: 'save',
+        amount: 200,
+        goalId: 'goal_debt',
+      },
+      expectedOutcome: 'Pay off loans 6 months faster',
+    },
+    {
+      id: 'elena_car',
+      description: 'Save $150 for car fund',
+      action: {
+        type: 'save',
+        amount: 150,
+        goalId: 'goal_car',
+      },
+      expectedOutcome: 'Steady progress toward new car',
+    },
+    {
+      id: 'elena_conservative_invest',
+      description: 'Invest $100 in Roth IRA',
+      action: {
+        type: 'invest',
+        amount: 100,
+        targetAccountId: 'rothIRA',
+      },
+      expectedOutcome: 'Start building retirement slowly',
+    },
+  ],
+};
+
+/**
+ * All demo scenarios
+ */
+export const demoScenarios: DemoScenario[] = [
+  sarahScenario,
+  marcusScenario,
+  elenaScenario,
+];
+
+/**
+ * Get scenario by ID
+ */
+export function getScenarioById(id: string): DemoScenario | null {
+  return demoScenarios.find(s => s.id === id) || null;
+}
+
+/**
+ * Get all scenario summaries (without full user data)
+ */
+export function getScenarioSummaries(): Array<Omit<DemoScenario, 'user'> & { userId: string }> {
+  return demoScenarios.map(s => ({
+    id: s.id,
+    name: s.name,
+    persona: s.persona,
+    description: s.description,
+    highlights: s.highlights,
+    userId: s.user.id,
+    suggestedActions: s.suggestedActions,
+  }));
+}

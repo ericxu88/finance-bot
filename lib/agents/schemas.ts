@@ -66,28 +66,34 @@ export const BudgetingAnalysisSchema = AgentAnalysisSchema.extend({
 export const InvestmentAnalysisSchema = AgentAnalysisSchema.extend({
   investment_metrics: z.object({
     projected_value_5yr: z.number()
+      .nullable()
       .optional()
       .describe('Projected investment value in 5 years'),
 
     annualized_return_assumption: z.number()
+      .nullable()
       .optional()
       .describe('Assumed annual return rate used'),
 
     time_to_goal_impact_months: z.number()
+      .nullable()
       .optional()
       .describe('Impact on time to reach goal (negative = faster, positive = slower)'),
 
     risk_assessment: z.enum(['low', 'medium', 'high', 'very_high'])
+      .nullable()
       .optional()
       .describe('Risk level assessment for this investment'),
 
     goal_alignment_score: z.number()
       .min(0)
       .max(1)
+      .nullable()
       .optional()
       .describe('How well this investment aligns with stated goal (0-1)'),
 
     diversification_impact: z.string()
+      .nullable()
       .optional()
       .describe('How this affects portfolio diversification')
   })
@@ -111,13 +117,14 @@ export const GuardrailAnalysisSchema = z.object({
     violation_details: z.string()
       .describe('Specific details about what was violated'),
 
-    current_value: z.union([z.number(), z.string()])
+    current_value: z.union([z.number(), z.string(), z.null()])
       .describe('Current value that triggered violation'),
 
-    threshold_value: z.union([z.number(), z.string()])
+    threshold_value: z.union([z.number(), z.string(), z.null()])
       .describe('The threshold that was crossed'),
 
     suggested_adjustment: z.string()
+      .nullable()
       .optional()
       .describe('Suggestion for how to modify action to comply')
   })),
@@ -152,7 +159,7 @@ export const ValidationAnalysisSchema = z.object({
   uncertainty_sources: z.array(z.object({
     source: z.string(),
     impact: z.enum(['high', 'medium', 'low']),
-    mitigation: z.string().optional()
+    mitigation: z.string().nullable().optional()
   })).describe('Sources of uncertainty in the analysis'),
 
   data_sufficiency: z.object({

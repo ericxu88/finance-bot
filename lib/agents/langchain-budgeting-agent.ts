@@ -10,7 +10,10 @@ import { BudgetingAnalysisSchema } from './schemas.js';
 export class LangChainBudgetingAgent extends LangChainBaseAgent<typeof BudgetingAnalysisSchema> {
   readonly agentName = 'Budgeting Agent';
   readonly schema = BudgetingAnalysisSchema;
-  readonly temperature = 0.2; // Lower temperature for more consistent budgeting analysis
+
+  constructor() {
+    super(0.2); // Lower temperature for more consistent budgeting analysis
+  }
 
   readonly systemPrompt = `You are an expert budgeting analyst specializing in personal finance.
 

@@ -10,7 +10,10 @@ import { InvestmentAnalysisSchema } from './schemas.js';
 export class LangChainInvestmentAgent extends LangChainBaseAgent<typeof InvestmentAnalysisSchema> {
   readonly agentName = 'Investment Agent';
   readonly schema = InvestmentAnalysisSchema;
-  readonly temperature = 0.3;
+
+  constructor() {
+    super(0.3);
+  }
 
   readonly systemPrompt = `You are an expert investment analyst specializing in personal financial planning.
 
