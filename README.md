@@ -7,13 +7,18 @@ An intelligent financial decision simulation system that shows users what happen
 ```
 finance-bot/
 ├── types/
-│   ├── financial.ts      # Core type definitions
+│   ├── financial.ts      # Core type definitions (18 interfaces)
 │   ├── sample-data.ts    # Detailed sample (Sarah Chen)
 │   └── index.ts          # Clean exports
 ├── lib/
-│   ├── sample-data.ts    # Simplified demo data (Sarah)
-│   ├── usage-example.ts  # Usage demonstrations
-│   └── README.md         # Library documentation
+│   ├── sample-data.ts         # Simplified demo data (Sarah)
+│   ├── simulation-engine.ts   # Core simulation functions ⭐ NEW
+│   ├── usage-example.ts       # Usage demonstrations
+│   ├── simulation-demo.ts     # Interactive simulation demo ⭐ NEW
+│   ├── __tests__/
+│   │   └── simulation-engine.test.ts  # Test suite ⭐ NEW
+│   ├── README.md              # Library documentation
+│   └── SIMULATION-ENGINE.md   # Simulation docs ⭐ NEW
 ├── package.json          # Project dependencies
 ├── tsconfig.json         # TypeScript configuration
 └── README.md            # This file
