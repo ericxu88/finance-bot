@@ -122,7 +122,15 @@ npm run build
 npm run test
 ```
 
-This builds the project and runs the simulation engine test suite (`lib/__tests__/simulation-engine.test.ts`).
+This builds the project and runs the full backend unit test suite:
+
+- **user-state-store** – get, set, getOrCreate, has, delete
+- **audit-log** – appendExecutedAction, getHistory, getRecordById, getLastRecord, removeLastRecord
+- **apply-action** – apply_action for save/invest/spend, no mutation, correct outputs
+- **execute API** – POST /execute, GET /user/:id, GET /user/:id/history, POST /undo, GET/POST /freeze
+- **simulation-engine** – simulate_save, simulate_invest, compare_options, constraints
+
+The execute-api test starts the app on a random port (requires network permission in restricted environments).
 
 ### Run LangChain Multi-Agent Demo
 
@@ -158,9 +166,18 @@ console.log(`Total Assets: $${
 }`);
 ```
 
+## 🔒 Permission & Safety (Confirm Before Execute)
+
+**The system asks the user for permission before doing anything.** No financial action is applied automatically.
+
+- **Simulate** (`POST /simulate`, `POST /compare`, chat) – All return recommendations and projected outcomes only. No state is changed.
+- **Execute** (`POST /execute`) – State is updated **only** when the client explicitly calls this endpoint after the user has confirmed (e.g. clicked an "Execute: Save $500" button). The backend never applies an action without an explicit execute request.
+
+**Contract:** Actions are applied only after user confirmation via the Execute flow. The frontend (or any client) must call `POST /execute` with the chosen action only after the user has confirmed; the API does not auto-apply any recommendation.
+
 ## 📋 Project Scope
 
-This repo is **backend-only**: types, simulation engine, demo data, LangChain multi-agent system, and scripts. No frontend or HTTP server.
+This repo includes a backend API and (optionally) a frontend: types, simulation engine, demo data, LangChain multi-agent system, state store, audit log, and HTTP server.
 
 ### Key Components
 

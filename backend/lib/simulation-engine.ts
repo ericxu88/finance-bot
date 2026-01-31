@@ -726,3 +726,76 @@ export function compare_options(
     }
   });
 }
+
+// ============================================================================
+// APPLY ACTION (mutate user state after user confirms)
+// ============================================================================
+
+export interface ApplyActionResult {
+  /** User profile after applying the action (new object, no mutation of input) */
+  updatedUser: UserProfile;
+  /** Simulation result used for the apply (same as simulate_* output) */
+  simulationResult: SimulationResult;
+}
+
+/**
+ * Apply a confirmed financial action to user state.
+ * Returns a new UserProfile with updated accounts, goals (currentAmount), and spending (currentSpent).
+ * Use only after user has confirmed (e.g. clicked "Execute"). Does not mutate the input user.
+ */
+export function apply_action(
+  state: UserProfile,
+  action: FinancialAction
+): ApplyActionResult {
+  let simulationResult: SimulationResult;
+
+  switch (action.type) {
+    case 'save':
+      simulationResult = simulate_save(state, action.amount, action.goalId);
+      break;
+    case 'invest':
+      simulationResult = simulate_invest(
+        state,
+        action.amount,
+        (action.targetAccountId as 'taxable' | 'rothIRA' | 'traditional401k') || 'taxable',
+        action.goalId
+      );
+      break;
+    case 'spend':
+      simulationResult = simulate_spend(
+        state,
+        action.amount,
+        action.category || 'Miscellaneous'
+      );
+      break;
+    default:
+      throw new Error(`Unknown action type: ${(action as FinancialAction).type}`);
+  }
+
+  const accountsAfter = simulationResult.scenarioIfDo.accountsAfter;
+
+  const updatedGoals = state.goals.map((g) => {
+    if (action.goalId && g.id === action.goalId && (action.type === 'save' || action.type === 'invest')) {
+      const newAmount = Math.min(g.currentAmount + action.amount, g.targetAmount);
+      return { ...g, currentAmount: newAmount };
+    }
+    return { ...g };
+  });
+
+  const updatedSpendingCategories = state.spendingCategories.map((cat) => {
+    if (action.type === 'spend' && (cat.id === action.category || cat.name === action.category)) {
+      return { ...cat, currentSpent: cat.currentSpent + action.amount };
+    }
+    return { ...cat };
+  });
+
+  const updatedUser: UserProfile = {
+    ...state,
+    accounts: cloneAccounts(accountsAfter),
+    goals: updatedGoals,
+    spendingCategories: updatedSpendingCategories,
+    updatedAt: new Date(),
+  };
+
+  return { updatedUser, simulationResult };
+}

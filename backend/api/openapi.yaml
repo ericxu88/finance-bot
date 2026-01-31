@@ -4,11 +4,16 @@ info:
   description: |
     Intelligent financial decision simulation platform with multi-agent AI analysis.
     
+    **Permission:** Actions are applied only after user confirmation. The backend never
+    applies a financial action automatically. Clients must call POST /execute with the
+    chosen action only after the user has confirmed (e.g. clicked an "Execute" button).
+    
     This API provides endpoints for:
     - Financial action simulation (save, invest, spend)
     - Multi-action comparison
+    - Execute confirmed action (POST /execute) – updates state only when user has confirmed
     - AI-powered agent analysis
-    - Sample user data
+    - Sample user data, user state (GET /user/:id), and history (GET /user/:id/history)
   version: 1.0.0
   contact:
     name: Finance Bot Team

@@ -10,8 +10,11 @@ import {
   simulate_invest,
   simulate_spend,
   compare_options,
+  apply_action,
 } from '../lib/simulation-engine.js';
 import { sampleUser } from '../lib/sample-data.js';
+import { userStateStore } from '../lib/user-state-store.js';
+import { appendExecutedAction, getHistory, getLastRecord, removeLastRecord } from '../lib/audit-log.js';
 import { calculateHistoricalMetrics } from '../lib/agents/historical-metrics.js';
 import { LangChainAgentOrchestrator } from '../lib/agents/langchain-orchestrator.js';
 import { MockAgentOrchestrator } from '../lib/agents/mock-orchestrator.js';
@@ -22,6 +25,9 @@ import type { UserProfile, FinancialAction } from '../types/financial.js';
 
 const app = express();
 const port = process.env.PORT ? Number(process.env.PORT) : 3000;
+
+/** Optional: freeze automation (no background automation in MVP; flag for future or UI message). */
+let automationFrozen = false;
 
 app.use(express.json({ limit: '1mb' }));
 
@@ -143,6 +149,15 @@ const compareRequestSchema = z.object({
   options: z.array(simulateActionSchema).min(1),
 });
 
+const executeRequestSchema = z.object({
+  user: userProfileSchema.optional(),
+  action: simulateActionSchema,
+  /** When provided, user is loaded from store (or created from sample); updated state is persisted. */
+  userId: z.string().min(1).optional(),
+}).refine((data) => data.user != null || data.userId != null, {
+  message: 'Either user or userId must be provided',
+});
+
 const recommendRequestSchema = z.object({
   user: userProfileSchema,
   evaluateWithAgents: z.boolean().optional().default(false),
@@ -204,8 +219,150 @@ app.post('/compare', (req: Request, res: Response) => {
   return res.status(200).json(results);
 });
 
+/**
+ * POST /execute
+ * Apply a confirmed financial action to user state (only after user has confirmed, e.g. clicked Execute).
+ * When userId is provided, state is loaded from and saved to the user state store.
+ * Returns updated user profile and the simulation result used.
+ */
+app.post('/execute', (req: Request, res: Response) => {
+  const parsed = executeRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: 'Invalid request payload',
+      details: parsed.error.flatten(),
+    });
+  }
+
+  const { user: bodyUser, action, userId } = parsed.data;
+  const user = userId != null
+    ? userStateStore.getOrCreate(userId, sampleUser)
+    : bodyUser!;
+
+  const actionForApply: FinancialAction = {
+    type: action.type,
+    amount: action.amount,
+    goalId: action.type !== 'spend' ? action.goalId : undefined,
+    targetAccountId: action.type === 'invest' ? action.targetAccountId : action.type === 'save' ? 'savings' : undefined,
+    category: action.type === 'spend' ? action.category : undefined,
+  };
+
+  try {
+    const { updatedUser, simulationResult } = apply_action(user, actionForApply);
+    if (userId != null) {
+      userStateStore.set(userId, updatedUser);
+      appendExecutedAction(userId, {
+        action: actionForApply,
+        previousStateSnapshot: user,
+        newStateSnapshot: updatedUser,
+        timestamp: new Date(),
+      });
+    }
+    return res.status(200).json({
+      updatedUser,
+      simulationResult,
+      message: `Action applied: ${action.type} $${action.amount}`,
+    });
+  } catch (err) {
+    console.error('Execute error:', err);
+    return res.status(500).json({
+      error: 'Failed to apply action',
+      message: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
 app.get('/sample', (_req: Request, res: Response) => {
   return res.status(200).json(sampleUser);
+});
+
+/**
+ * GET /user/:id
+ * Return current user profile from the state store (for dashboard, etc.).
+ * If the user has not been created yet, returns a profile seeded from the sample user.
+ */
+app.get('/user/:id', (req: Request, res: Response) => {
+  const id = req.params.id;
+  if (!id) {
+    return res.status(400).json({ error: 'User ID required' });
+  }
+  const user = userStateStore.getOrCreate(id, sampleUser);
+  return res.status(200).json(user);
+});
+
+/**
+ * GET /user/:id/history
+ * Return audit trail of executed actions for the user (newest first).
+ * Query: limit (optional, default 20).
+ */
+app.get('/user/:id/history', (req: Request, res: Response) => {
+  const id = req.params.id;
+  if (!id) {
+    return res.status(400).json({ error: 'User ID required' });
+  }
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
+  const records = getHistory(id, limit);
+  return res.status(200).json({
+    userId: id,
+    history: records,
+    metadata: { limit, count: records.length, timestamp: new Date().toISOString() },
+  });
+});
+
+/**
+ * POST /undo
+ * Undo the most recent executed action for the user (one-level undo).
+ * Restores the previous state from the audit log and removes that record from history.
+ * Body: { userId: string }.
+ */
+const undoRequestSchema = z.object({ userId: z.string().min(1) });
+
+app.post('/undo', (req: Request, res: Response) => {
+  const parsed = undoRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: 'Invalid request payload',
+      details: parsed.error.flatten(),
+    });
+  }
+  const { userId } = parsed.data;
+  const last = getLastRecord(userId);
+  if (!last) {
+    return res.status(404).json({
+      error: 'Nothing to undo',
+      message: 'No executed action found for this user.',
+    });
+  }
+  userStateStore.set(userId, last.previousStateSnapshot);
+  removeLastRecord(userId);
+  return res.status(200).json({
+    restoredUser: last.previousStateSnapshot,
+    undoneAction: last.action,
+    message: `Undid: ${last.action.type} $${last.action.amount}`,
+  });
+});
+
+/**
+ * GET /freeze
+ * Return whether automation is frozen (for UI: "Automation paused").
+ * MVP has no background automation; this is for future or display.
+ */
+app.get('/freeze', (_req: Request, res: Response) => {
+  return res.status(200).json({ frozen: automationFrozen });
+});
+
+/**
+ * POST /freeze
+ * Set automation freeze flag. Body: { frozen: boolean }.
+ */
+const freezeRequestSchema = z.object({ frozen: z.boolean() });
+app.post('/freeze', (req: Request, res: Response) => {
+  const parsed = freezeRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Invalid request payload', details: parsed.error.flatten() });
+  }
+  automationFrozen = parsed.data.frozen;
+  return res.status(200).json({ frozen: automationFrozen });
 });
 
 app.get('/api-docs', (_req: Request, res: Response) => {
@@ -718,6 +875,20 @@ app.post('/chat', async (req: Request, res: Response) => {
       parsedAction,
     });
 
+    const comparison =
+      response.intent.intent_type === 'compare_options' &&
+      Array.isArray(response.rawAnalysis)
+        ? (response.rawAnalysis as Array<{
+            action: { action: FinancialAction; reasoning: string; scenarioIfDo?: { goalImpacts?: Array<{ progressChangePct?: number }> } };
+            analysis: { overallConfidence: string };
+          }>).map((item) => ({
+            action: item.action.action,
+            reasoning: item.action.reasoning,
+            confidence: item.analysis.overallConfidence,
+            goalImpactPct: item.action.scenarioIfDo?.goalImpacts?.[0]?.progressChangePct,
+          }))
+        : undefined;
+
     return res.status(200).json({
       conversationId: response.conversationId,
       reply: response.reply.message,
@@ -726,6 +897,7 @@ app.post('/chat', async (req: Request, res: Response) => {
       suggestedFollowUps: response.reply.suggestedFollowUps,
       shouldProceed: response.reply.shouldProceed,
       confidence: response.reply.confidence,
+      comparison,
       intent: {
         type: response.intent.intent_type,
         action: response.intent.action,
@@ -819,7 +991,11 @@ app.post('/chat/stream', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`API listening on http://localhost:${port}`);
-  console.log(`Chat endpoint available at POST /chat`);
-});
+if (process.env.TEST !== '1') {
+  app.listen(port, () => {
+    console.log(`API listening on http://localhost:${port}`);
+    console.log(`Chat endpoint available at POST /chat`);
+  });
+}
+
+export { app };
