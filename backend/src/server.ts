@@ -271,7 +271,8 @@ app.post('/recommend', async (req: Request, res: Response) => {
     // Step 2: Optionally evaluate top recommendations with agents
     let evaluatedRecommendations = recommendations;
     if (evaluateWithAgents && recommendations.length > 0) {
-      const useMockAgents = !process.env.GOOGLE_API_KEY || process.env.USE_MOCK_AGENTS === 'true';
+      const openAiKey = process.env.OPEN_AI_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim();
+      const useMockAgents = !openAiKey || process.env.USE_MOCK_AGENTS === 'true';
       const orchestrator = useMockAgents
         ? new MockAgentOrchestrator()
         : new LangChainAgentOrchestrator();
@@ -458,7 +459,8 @@ app.post('/analyze', async (req: Request, res: Response) => {
     const historicalMetrics = calculateHistoricalMetrics(user);
 
     // Step 3: Run agent analysis (use mock if no API key, real if available)
-    const useMockAgents = !process.env.GOOGLE_API_KEY || process.env.USE_MOCK_AGENTS === 'true';
+    const openAiKey = process.env.OPEN_AI_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim();
+    const useMockAgents = !openAiKey || process.env.USE_MOCK_AGENTS === 'true';
     const orchestrator = useMockAgents
       ? new MockAgentOrchestrator()
       : new LangChainAgentOrchestrator();
@@ -548,7 +550,8 @@ app.post('/analyze/stream', async (req: Request, res: Response): Promise<void> =
     sendEvent('status', { stage: 'metrics', message: 'Calculated historical metrics' });
 
     // Step 3: Check if using mock or real agents
-    const useMockAgents = !process.env.GOOGLE_API_KEY || process.env.USE_MOCK_AGENTS === 'true';
+    const openAiKey = process.env.OPEN_AI_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim();
+    const useMockAgents = !openAiKey || process.env.USE_MOCK_AGENTS === 'true';
 
     if (useMockAgents) {
       // Mock mode - instant results

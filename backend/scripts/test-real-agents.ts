@@ -1,8 +1,8 @@
 /**
  * Real Agent API Test
  * 
- * Tests the actual Google Gemini API integration with minimal requests.
- * Only runs if GOOGLE_API_KEY is set.
+ * Tests the actual OpenAI API integration with minimal requests.
+ * Only runs if OPENAI_API_KEY is set.
  * 
  * This makes 2 API calls total:
  * 1. Single agent test (Budgeting Agent)
@@ -20,15 +20,16 @@ import { LangChainAgentOrchestrator } from '../lib/agents/langchain-orchestrator
 import type { FinancialAction } from '../types/financial.js';
 
 // Check for API key
-if (!process.env.GOOGLE_API_KEY) {
-  console.log('⚠️  GOOGLE_API_KEY not set. Skipping real API tests.');
-  console.log('   Set your API key: export GOOGLE_API_KEY=your_key_here');
+const openAiKey = process.env.OPEN_AI_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim();
+if (!openAiKey) {
+  console.log('⚠️  OPENAI_API_KEY not set. Skipping real API tests.');
+  console.log('   Set your API key: export OPENAI_API_KEY=your_key_here');
   console.log('   Or add it to .env file');
   process.exit(0);
 }
 
-console.log('🔑 Google API Key found. Running REAL API tests...');
-console.log('⚠️  This will make actual API calls to Google Gemini');
+console.log('🔑 OpenAI API Key found. Running REAL API tests...');
+console.log('⚠️  This will make actual API calls to OpenAI');
 console.log('='.repeat(60));
 
 const action: FinancialAction = {
@@ -63,7 +64,7 @@ async function runTests() {
   // =========================================================================
   console.log('\n🧪 TEST 1: Single Agent (Budgeting Agent)');
   console.log('-'.repeat(60));
-  console.log('Making 1 API call to Google Gemini...\n');
+  console.log('Making 1 API call to OpenAI...\n');
   
   try {
     const budgetingAgent = new LangChainBudgetingAgent();
@@ -89,7 +90,7 @@ async function runTests() {
   // =========================================================================
   console.log('\n🧪 TEST 2: Full Orchestrator (All 4 Agents)');
   console.log('-'.repeat(60));
-  console.log('Making ~5 API calls to Google Gemini...');
+  console.log('Making ~5 API calls to OpenAI...');
   console.log('(3 agents in parallel, then 1 validation agent)\n');
   
   try {
@@ -123,7 +124,7 @@ async function runTests() {
   console.log('='.repeat(60));
   console.log(`Total time: ${(totalTime / 1000).toFixed(2)}s`);
   console.log(`API calls made: ~6 (1 single + 5 orchestrator)`);
-  console.log('\n✅ Google Gemini integration is working correctly');
+  console.log('\n✅ OpenAI integration is working correctly');
   console.log('✅ LangChain agents produce valid structured outputs');
   console.log('✅ Orchestrator coordinates agents successfully');
 }

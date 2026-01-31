@@ -1,8 +1,8 @@
 /**
  * Real API Endpoint Test
  * 
- * Tests the /analyze endpoint with real Google Gemini API calls.
- * Requires GOOGLE_API_KEY to be set.
+ * Tests the /analyze endpoint with real OpenAI API calls.
+ * Requires OPENAI_API_KEY to be set.
  * 
  * Run with: npm run test:api-real
  */
@@ -10,8 +10,9 @@
 import 'dotenv/config';
 
 // Check for API key first
-if (!process.env.GOOGLE_API_KEY) {
-  console.log('⚠️  GOOGLE_API_KEY not set. Skipping real API endpoint tests.');
+const openAiKey = process.env.OPEN_AI_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim();
+if (!openAiKey) {
+  console.log('⚠️  OPENAI_API_KEY not set. Skipping real API endpoint tests.');
   console.log('   Set your API key in .env file');
   process.exit(0);
 }
@@ -21,8 +22,8 @@ process.env.USE_MOCK_AGENTS = 'false';
 
 import { sampleUser } from '../lib/sample-data.js';
 
-console.log('🔑 Google API Key found. Testing /analyze endpoint with REAL agents...');
-console.log('⚠️  This will make actual API calls to Google Gemini');
+console.log('🔑 OpenAI API Key found. Testing /analyze endpoint with REAL agents...');
+console.log('⚠️  This will make actual API calls to OpenAI');
 console.log('='.repeat(60));
 
 async function runTest() {

@@ -1,48 +1,23 @@
 /**
- * List available Gemini models for your API key
+ * List available OpenAI models
  */
 
 import 'dotenv/config';
 
-const apiKey = process.env.GOOGLE_API_KEY;
+console.log('📋 Available OpenAI Models:\n');
 
-if (!apiKey) {
-  console.log('❌ GOOGLE_API_KEY not set');
-  process.exit(1);
-}
+const models = [
+  { name: 'gpt-4o-mini', description: 'Fastest, cheapest (recommended for development)' },
+  { name: 'gpt-4o', description: 'Balanced speed and quality' },
+  { name: 'gpt-4-turbo', description: 'High quality, slower' },
+  { name: 'gpt-4', description: 'Highest quality, slowest' },
+  { name: 'gpt-3.5-turbo', description: 'Legacy, fast but less capable' },
+];
 
-console.log('🔍 Fetching available models...\n');
+models.forEach(model => {
+  console.log(`  ✓ ${model.name.padEnd(20)} ${model.description}`);
+});
 
-interface ModelResponse {
-  error?: { message: string };
-  models?: Array<{ name: string; supportedGenerationMethods?: string[] }>;
-}
-
-async function listModels() {
-  try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-    const data = await res.json() as ModelResponse;
-    
-    if (data.error) {
-      console.error('❌ Error:', data.error.message);
-      process.exit(1);
-    }
-    
-    console.log('Available models that support generateContent:\n');
-    
-    const generateModels = data.models?.filter(m => 
-      m.supportedGenerationMethods?.includes('generateContent')
-    ) || [];
-    
-    generateModels.forEach(model => {
-      console.log(`  ✓ ${model.name.replace('models/', '')}`);
-    });
-    
-    console.log(`\nTotal: ${generateModels.length} models`);
-    console.log('\nAdd one of these to your .env file as GEMINI_MODEL');
-  } catch (err) {
-    console.error('❌ Fetch error:', err);
-  }
-}
-
-listModels();
+console.log('\n💡 Set one in your .env file:');
+console.log('   OPENAI_MODEL=gpt-4o-mini');
+console.log('\n📖 See full list: https://platform.openai.com/docs/models');

@@ -4,13 +4,13 @@
  * Runs 3 example "queries" (actions) through the orchestrator and prints
  * INPUT (query + action) and full OUTPUT (all agent analyses, final recommendation).
  *
- * Uses real LLM if OPEN_AI_API_KEY or GOOGLE_API_KEY is set; otherwise mock (no API).
+ * Uses real LLM if OPEN_AI_API_KEY or OPENAI_API_KEY is set; otherwise mock (no API).
  *
  * Usage: npm run build && npm run demo:e2e
  */
 
 import { existsSync, readFileSync } from 'fs';
-import { fileURLToPath, pathToFileURL } from 'url';
+import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { sampleUser } from '../lib/sample-data.js';
 import { simulate_save, simulate_invest } from '../lib/simulation-engine.js';
@@ -21,7 +21,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 // When run as dist/scripts/demo-e2e-workflow.js, __dirname is dist/scripts → go up twice for project root
 const ROOT = join(__dirname, '..', '..');
-const DIST = join(ROOT, 'dist');
 
 function loadEnv(): void {
   const envPath = join(ROOT, '.env');
@@ -112,14 +111,14 @@ async function runOne(
   const context = buildContext(action);
 
   if (useRealOrchestrator) {
-    const { LangChainAgentOrchestrator } = await import(pathToFileURL(join(DIST, 'lib', 'agents', 'langchain-orchestrator.js')).href);
+    const { LangChainAgentOrchestrator } = await import('../lib/agents/langchain-orchestrator.js');
     const orchestrator = new (LangChainAgentOrchestrator as new () => { processDecision: (ctx: AgentContext) => Promise<unknown> })();
     const result = (await orchestrator.processDecision(context)) as Parameters<typeof formatOutput>[0];
     console.log('OUTPUT (agents worked together → response)');
     console.log('─'.repeat(80));
     console.log(formatOutput(result));
   } else {
-    const { MockAgentOrchestrator } = await import(pathToFileURL(join(DIST, 'lib', 'agents', 'mock-orchestrator.js')).href);
+    const { MockAgentOrchestrator } = await import('../lib/agents/mock-orchestrator.js');
     const orchestrator = new (MockAgentOrchestrator as new () => { processDecision: (ctx: unknown) => Promise<unknown> })();
     const result = (await orchestrator.processDecision(context)) as Parameters<typeof formatOutput>[0];
     console.log('OUTPUT (mock – agents worked together → response)');
@@ -129,10 +128,11 @@ async function runOne(
 }
 
 async function main(): Promise<void> {
-  const useReal = !!(process.env.OPEN_AI_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim() || process.env.GOOGLE_API_KEY?.trim());
+  const openAiKey = process.env.OPEN_AI_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim();
+  const useReal = !!openAiKey;
 
   console.log('\n🧪 End-to-end workflow: example queries → full agent output');
-  console.log('   Mode: ' + (useReal ? 'LIVE (OpenAI or Gemini)' : 'MOCK (no API)'));
+  console.log('   Mode: ' + (useReal ? 'LIVE (OpenAI)' : 'MOCK (no API)'));
   console.log('   User: ' + sampleUser.name + ' (income $' + sampleUser.monthlyIncome + '/mo, checking $' + sampleUser.accounts.checking + ')');
 
   const examples: { query: string; action: FinancialAction }[] = [

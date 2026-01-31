@@ -62,7 +62,8 @@ export class ChatHandler {
   private fastMode: boolean;
 
   constructor(options?: { fastMode?: boolean }) {
-    this.useMockAgents = !process.env.GOOGLE_API_KEY || process.env.USE_MOCK_AGENTS === 'true';
+    const openAiKey = process.env.OPEN_AI_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim();
+    this.useMockAgents = !openAiKey || process.env.USE_MOCK_AGENTS === 'true';
     this.fastMode = options?.fastMode ?? (process.env.FAST_MODE === 'true');
     
     // Use mock parser if no API key (for development)

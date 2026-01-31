@@ -23,17 +23,18 @@ async function main() {
   console.log('================================================\n');
 
   // Check for API key
-  if (!process.env.GOOGLE_API_KEY) {
-    console.error('❌ Error: GOOGLE_API_KEY environment variable not set');
+  const openAiKey = process.env.OPEN_AI_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim();
+  if (!openAiKey) {
+    console.error('❌ Error: OPENAI_API_KEY environment variable not set');
     console.error('\nTo fix this, choose one of these options:');
     console.error('\n1. Create a .env file in the project root:');
-    console.error('   echo "GOOGLE_API_KEY=your_key_here" > .env');
+    console.error('   echo "OPENAI_API_KEY=your_key_here" > .env');
     console.error('\n2. Export it in your terminal:');
-    console.error('   export GOOGLE_API_KEY=your_key_here');
+    console.error('   export OPENAI_API_KEY=your_key_here');
     console.error('   npm run demo:agents');
     console.error('\n3. Pass it inline:');
-    console.error('   GOOGLE_API_KEY=your_key_here npm run demo:agents');
-    console.error('\nGet a free API key at: https://aistudio.google.com/apikey\n');
+    console.error('   OPENAI_API_KEY=your_key_here npm run demo:agents');
+    console.error('\nGet an API key at: https://platform.openai.com/api-keys\n');
     process.exit(1);
   }
 

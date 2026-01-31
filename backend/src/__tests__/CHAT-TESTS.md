@@ -24,10 +24,10 @@ Tests all chat functionality using mock agents and mock intent parsing. Fast and
 ### 2. `test-chat-real.ts` - Real API Test (Minimal Calls)
 **Command:** `npm run test:chat-real`
 
-Makes **ONE** real API call to Google Gemini to verify the chat interface works with the actual LLM.
+Makes **ONE** real API call to OpenAI to verify the chat interface works with the actual LLM.
 
 **What it tests:**
-- Real intent parsing with Gemini
+- Real intent parsing with OpenAI
 - Fast mode (unified agent = 1 LLM call)
 - Response structure validation
 - Response time measurement
@@ -35,7 +35,7 @@ Makes **ONE** real API call to Google Gemini to verify the chat interface works 
 **Expected Runtime:** 3-10 seconds (depending on model)
 
 **Requirements:**
-- `GOOGLE_API_KEY` must be set in `.env`
+- `OPENAI_API_KEY` must be set in `.env`
 - `USE_MOCK_AGENTS` must NOT be `true`
 - Will skip automatically if API key is missing
 

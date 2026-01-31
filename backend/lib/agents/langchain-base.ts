@@ -2,10 +2,9 @@
  * LangChain Base Agent
  *
  * Abstract base class for all LangChain-powered agents.
- * Uses OpenAI when OPEN_AI_API_KEY (or OPENAI_API_KEY) is set; otherwise Google Gemini.
+ * Uses OpenAI for all LLM operations.
  */
 
-import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import { ChatOpenAI } from '@langchain/openai';
 import { StructuredOutputParser } from '@langchain/core/output_parsers';
 import { PromptTemplate } from '@langchain/core/prompts';
@@ -27,7 +26,7 @@ export interface AgentContext {
 }
 
 export abstract class LangChainBaseAgent<TSchema extends z.ZodType> {
-  protected model: ChatGoogleGenerativeAI | ChatOpenAI;
+  protected model: ChatOpenAI;
   protected parser!: StructuredOutputParser<z.infer<TSchema>>;
 
   abstract readonly agentName: string;
@@ -36,31 +35,18 @@ export abstract class LangChainBaseAgent<TSchema extends z.ZodType> {
 
   constructor(temperature: number) {
     const openAiKey = process.env.OPEN_AI_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim();
-    if (openAiKey) {
-      const modelName = process.env.OPENAI_MODEL?.trim() || 'gpt-4o-mini';
-      this.model = new ChatOpenAI({
-        model: modelName,
-        temperature,
-        apiKey: openAiKey,
-        maxTokens: 8192,
-        maxRetries: 1,
-      });
-      return;
-    }
-
-    const apiKey = process.env.GOOGLE_API_KEY;
-    if (!apiKey) {
+    if (!openAiKey) {
       throw new Error(
-        'No LLM API key found. Set OPEN_AI_API_KEY (or OPENAI_API_KEY) for OpenAI, or GOOGLE_API_KEY for Gemini (https://aistudio.google.com/apikey)'
+        'OPENAI_API_KEY (or OPEN_AI_API_KEY) environment variable is required. Get one at https://platform.openai.com/api-keys'
       );
     }
 
-    const modelName = process.env.GEMINI_MODEL || 'gemini-2.0-flash-lite';
-    this.model = new ChatGoogleGenerativeAI({
+    const modelName = process.env.OPENAI_MODEL?.trim() || 'gpt-4o-mini';
+    this.model = new ChatOpenAI({
       model: modelName,
       temperature,
-      apiKey,
-      maxOutputTokens: 8192,
+      apiKey: openAiKey,
+      maxTokens: 8192,
       maxRetries: 1,
     });
   }

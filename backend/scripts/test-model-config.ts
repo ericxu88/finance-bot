@@ -1,7 +1,7 @@
 /**
  * Test Model Configuration
  * 
- * Verifies that the Gemini model configuration works without making unnecessary API calls
+ * Verifies that the OpenAI model configuration works without making unnecessary API calls
  */
 
 import { LangChainBaseAgent } from '../lib/agents/langchain-base.js';
@@ -26,26 +26,26 @@ class TestAgent extends LangChainBaseAgent<typeof BudgetingAnalysisSchema> {
   }
 }
 
-console.log('🧪 Testing Gemini Model Configuration');
+console.log('🧪 Testing OpenAI Model Configuration');
 console.log('='.repeat(60));
 
 // Check environment variables
-const apiKey = process.env.GOOGLE_API_KEY;
-const modelName = process.env.GEMINI_MODEL || 'gemini-pro';
+const apiKey = process.env.OPEN_AI_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim();
+const modelName = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
 console.log(`\n📋 Configuration:`);
 console.log(`   API Key: ${apiKey ? '✅ Set' : '❌ Not set'}`);
 console.log(`   Model: ${modelName}`);
-console.log(`   Expected: gemini-pro (default)`);
+console.log(`   Expected: gpt-4o-mini (default)`);
 
 // Test 1: Verify model configuration
 console.log('\n🧪 TEST 1: Model Configuration');
 console.log('-'.repeat(60));
 
 if (!apiKey) {
-  console.log('⚠️  GOOGLE_API_KEY not set - skipping agent initialization test');
-  console.log('✅ Model configuration code is correct (will use: gemini-pro)');
-  console.log('✅ To test agent initialization: export GOOGLE_API_KEY=your_key_here');
+  console.log('⚠️  OPENAI_API_KEY not set - skipping agent initialization test');
+  console.log('✅ Model configuration code is correct (will use: gpt-4o-mini)');
+  console.log('✅ To test agent initialization: export OPENAI_API_KEY=your_key_here');
 } else {
   try {
     const agent = new TestAgent(0.2);
@@ -55,8 +55,8 @@ if (!apiKey) {
     console.log(`   Configured model: ${modelName}`);
   } catch (error) {
     console.error(`❌ Failed to create agent:`, error);
-    if (error instanceof Error && error.message.includes('GOOGLE_API_KEY')) {
-      console.error(`\n💡 Set your API key: export GOOGLE_API_KEY=your_key_here`);
+    if (error instanceof Error && error.message.includes('OPENAI_API_KEY')) {
+      console.error(`\n💡 Set your API key: export OPENAI_API_KEY=your_key_here`);
     }
     process.exit(1);
   }
@@ -94,8 +94,8 @@ if (testRealAPI) {
     console.error(`❌ API call failed:`, error.message);
     if (error.message.includes('404') || error.message.includes('not found')) {
       console.error(`\n💡 Suggestion: Try a different model:`);
-      console.error(`   export GEMINI_MODEL=gemini-pro`);
-      console.error(`   export GEMINI_MODEL=gemini-1.5-flash`);
+      console.error(`   export OPENAI_MODEL=gpt-4o-mini`);
+      console.error(`   export OPENAI_MODEL=gpt-4o`);
     }
     process.exit(1);
   }

@@ -1,7 +1,7 @@
 /**
  * Real API Chat Test
  * 
- * Tests the chat interface with REAL Google Gemini API.
+ * Tests the chat interface with REAL OpenAI API.
  * Makes MINIMAL calls (only 1-2) to avoid exhausting the API.
  */
 
@@ -13,9 +13,10 @@ async function main() {
   console.log('='.repeat(60));
   
   // Check for API key
-  if (!process.env.GOOGLE_API_KEY) {
-    console.log('⚠️  GOOGLE_API_KEY not set. Skipping real API test.');
-    console.log('   Set GOOGLE_API_KEY in .env to run this test.');
+  const openAiKey = process.env.OPEN_AI_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim();
+  if (!openAiKey) {
+    console.log('⚠️  OPENAI_API_KEY not set. Skipping real API test.');
+    console.log('   Set OPENAI_API_KEY in .env to run this test.');
     process.exit(0);
   }
   
@@ -26,13 +27,13 @@ async function main() {
   }
   
   console.log('✅ API key found. Running ONE real API test...\n');
-  console.log('⚠️  This will make 1 API call to Google Gemini (fast mode + skip intent parsing).\n');
+  console.log('⚠️  This will make 1 API call to OpenAI (fast mode + skip intent parsing).\n');
   
   // Check model being used
-  const modelName = process.env.GEMINI_MODEL || 'gemini-2.0-flash-lite';
+  const modelName = process.env.OPENAI_MODEL || 'gpt-4o-mini';
   console.log(`📌 Using model: ${modelName}`);
-  if (!modelName.includes('flash') && !modelName.includes('lite')) {
-    console.log('⚠️  WARNING: You are using a slow model. Consider setting GEMINI_MODEL=gemini-2.0-flash-lite in .env\n');
+  if (modelName.includes('gpt-4') && !modelName.includes('mini')) {
+    console.log('⚠️  WARNING: You are using a slower model. Consider setting OPENAI_MODEL=gpt-4o-mini in .env\n');
   }
   
   const handler = new ChatHandler();
@@ -101,10 +102,10 @@ async function main() {
         console.log('✅ Response time is good (<10s)');
       } else if (elapsed < 20000) {
         console.log('⚠️  Response time is acceptable but slow (10-20s)');
-        console.log('   💡 Tip: Set GEMINI_MODEL=gemini-2.0-flash-lite in .env for faster responses');
+        console.log('   💡 Tip: Set OPENAI_MODEL=gpt-4o-mini in .env for faster responses');
       } else {
         console.log('⚠️  Response time is very slow (>20s)');
-        console.log('   💡 Tip: Set GEMINI_MODEL=gemini-2.0-flash-lite in .env');
+        console.log('   💡 Tip: Set OPENAI_MODEL=gpt-4o-mini in .env');
         console.log('   💡 Tip: Check your network connection');
       }
       
@@ -127,9 +128,9 @@ async function main() {
       if (error.message.includes('429')) {
         console.error('\n⚠️  Rate limit hit. Wait a bit and try again.');
       } else if (error.message.includes('404')) {
-        console.error('\n⚠️  Model not found. Check GEMINI_MODEL in .env');
+        console.error('\n⚠️  Model not found. Check OPENAI_MODEL in .env');
       } else if (error.message.includes('401') || error.message.includes('403')) {
-        console.error('\n⚠️  API key invalid. Check GOOGLE_API_KEY in .env');
+        console.error('\n⚠️  API key invalid. Check OPENAI_API_KEY in .env');
       }
     }
     

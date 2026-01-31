@@ -5,7 +5,7 @@
  * Uses LLM to extract intent, amount, goal, and other parameters.
  */
 
-import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
+import { ChatOpenAI } from '@langchain/openai';
 import { StructuredOutputParser } from 'langchain/output_parsers';
 import { PromptTemplate } from '@langchain/core/prompts';
 import { RunnableSequence } from '@langchain/core/runnables';
@@ -56,22 +56,23 @@ export const ParsedIntentSchema = z.object({
 export type ParsedIntent = z.infer<typeof ParsedIntentSchema>;
 
 export class IntentParser {
-  private model: ChatGoogleGenerativeAI;
+  private model: ChatOpenAI;
   private parser: StructuredOutputParser<typeof ParsedIntentSchema>;
   
   constructor() {
-    const apiKey = process.env.GOOGLE_API_KEY;
+    const apiKey = process.env.OPEN_AI_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim();
     if (!apiKey) {
-      throw new Error('GOOGLE_API_KEY required for chat functionality');
+      throw new Error('OPENAI_API_KEY (or OPEN_AI_API_KEY) required for chat functionality. Get one at https://platform.openai.com/api-keys');
     }
     
-    const modelName = process.env.GEMINI_MODEL || 'gemini-2.0-flash-lite';
+    const modelName = process.env.OPENAI_MODEL || 'gpt-4o-mini';
     
-    this.model = new ChatGoogleGenerativeAI({
+    this.model = new ChatOpenAI({
       model: modelName,
       temperature: 0.1, // Low temperature for consistent parsing
       apiKey,
-      maxOutputTokens: 2048,
+      maxTokens: 2048,
+      maxRetries: 1,
     });
     
     this.parser = StructuredOutputParser.fromZodSchema(ParsedIntentSchema);

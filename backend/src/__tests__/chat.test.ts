@@ -245,7 +245,7 @@ const TEST_TIMEOUT = 30000; // 30 seconds
 async function runTestsWithTimeout() {
   const timeoutId = setTimeout(() => {
     console.error(`\n❌ Tests timed out after ${TEST_TIMEOUT}ms`);
-    console.error('⚠️  Tests are hanging. Check if GOOGLE_API_KEY is set and causing real API calls.');
+    console.error('⚠️  Tests are hanging. Check if OPENAI_API_KEY is set and causing real API calls.');
     console.error('   Set USE_MOCK_AGENTS=true to force mock mode.');
     process.exit(1);
   }, TEST_TIMEOUT);
