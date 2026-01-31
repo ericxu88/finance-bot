@@ -1,0 +1,22 @@
+{
+  "name": "finance-bot",
+  "version": "0.1.0",
+  "description": "Intelligent financial decision simulation platform",
+  "type": "module",
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "validate": "tsc --noEmit && node --loader ts-node/esm validate-types.ts"
+  },
+  "keywords": [
+    "finance",
+    "simulation",
+    "decision-making",
+    "hackathon"
+  ],
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "@types/node": "^20.10.0"
+  }
+}
