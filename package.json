@@ -8,8 +8,14 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "npm run build && node dist/lib/__tests__/simulation-engine.test.js",
+    "test:api": "npm run build && node dist/src/__tests__/api.test.js",
     "demo:agents": "npm run build && node dist/scripts/demo-langchain-agents.js",
-    "validate": "tsc --noEmit && node --loader ts-node/esm validate-types.ts"
+    "demo:agents:mock": "npm run build && node dist/scripts/demo-agents-mock.js",
+    "test:model": "npm run build && node dist/scripts/test-model-config.js",
+    "test:real-agents": "npm run build && node dist/scripts/test-real-agents.js",
+    "list-models": "npm run build && node dist/scripts/list-models.js",
+    "validate": "npm run build && node dist/validate-types.js",
+    "start:api": "node dist/src/server.js"
   },
   "keywords": [
     "finance",
@@ -22,11 +28,16 @@
     "langchain": "^0.3.0",
     "@langchain/google-genai": "^0.2.0",
     "@langchain/core": "^0.3.0",
+    "express": "^4.19.2",
     "zod": "^3.23.8",
-    "zod-to-json-schema": "^3.23.0"
+    "zod-to-json-schema": "^3.23.0",
+    "dotenv": "^16.4.5",
+    "js-yaml": "^4.1.0"
   },
   "devDependencies": {
     "typescript": "^5.3.3",
-    "@types/node": "^20.10.0"
+    "@types/node": "^20.10.0",
+    "@types/express": "^4.17.21",
+    "@types/js-yaml": "^4.0.9"
   }
 }

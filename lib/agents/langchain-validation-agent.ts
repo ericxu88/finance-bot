@@ -22,7 +22,10 @@ interface ValidationContext extends AgentContext {
 export class LangChainValidationAgent extends LangChainBaseAgent<typeof ValidationAnalysisSchema> {
   readonly agentName = 'Validation Agent';
   readonly schema = ValidationAnalysisSchema;
-  readonly temperature = 0.4; // Balanced for synthesis
+
+  constructor() {
+    super(0.4); // Balanced for synthesis
+  }
 
   readonly systemPrompt = `You are a meta-analyst responsible for synthesizing and validating recommendations from multiple specialized agents.
 
@@ -66,9 +69,7 @@ Output a comprehensive validation in the specified JSON format.`;
 
   protected buildAnalysisPrompt(context: any): string {
     const {
-      user,
       action,
-      simulationResult,
       historicalMetrics,
       budgetingAnalysis,
       investmentAnalysis,
@@ -121,10 +122,10 @@ ${investmentAnalysis.reasoning}
 
 ${investmentAnalysis.investment_metrics ? `
 Metrics:
-- Projected 5yr value: ${this.formatCurrency(investmentAnalysis.investment_metrics.projected_value_5yr || 0)}
-- Time to goal impact: ${investmentAnalysis.investment_metrics.time_to_goal_impact_months || 0} months
-- Risk assessment: ${investmentAnalysis.investment_metrics.risk_assessment || 'N/A'}
-- Goal alignment: ${investmentAnalysis.investment_metrics.goal_alignment_score !== undefined ? this.formatPercent(investmentAnalysis.investment_metrics.goal_alignment_score) : 'N/A'}
+- Projected 5yr value: ${this.formatCurrency(investmentAnalysis.investment_metrics.projected_value_5yr ?? 0)}
+- Time to goal impact: ${investmentAnalysis.investment_metrics.time_to_goal_impact_months ?? 0} months
+- Risk assessment: ${investmentAnalysis.investment_metrics.risk_assessment ?? 'N/A'}
+- Goal alignment: ${investmentAnalysis.investment_metrics.goal_alignment_score != null ? this.formatPercent(investmentAnalysis.investment_metrics.goal_alignment_score) : 'N/A'}
 ` : ''}
 
 ═══════════════════════════════════════════════════════════

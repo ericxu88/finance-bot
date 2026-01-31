@@ -4,10 +4,19 @@
  * Demonstrates the full multi-agent system with real LLM calls
  */
 
-import { LangChainAgentOrchestrator } from './agents/langchain-orchestrator.js';
-import { sarah } from './demo-users.js';
-import { simulate_invest } from './simulation-engine.js';
-import type { FinancialAction } from '../types/financial.js';
+// Load environment variables from .env file if it exists
+import { config } from 'dotenv';
+config();
+
+import { LangChainAgentOrchestrator } from '../lib/agents/langchain-orchestrator.js';
+import { sarah } from '../lib/demo-users.js';
+import { simulate_invest } from '../lib/simulation-engine.js';
+import type {
+  FinancialAction,
+  FinancialGoal,
+  SpendingCategory,
+  Transaction,
+} from '../types/financial.js';
 
 async function main() {
   console.log('🤖 LangChain Multi-Agent Financial Analysis Demo');
@@ -16,8 +25,15 @@ async function main() {
   // Check for API key
   if (!process.env.GOOGLE_API_KEY) {
     console.error('❌ Error: GOOGLE_API_KEY environment variable not set');
-    console.error('Get a free API key at: https://aistudio.google.com/apikey');
-    console.error('Then set it with: export GOOGLE_API_KEY=your_key_here');
+    console.error('\nTo fix this, choose one of these options:');
+    console.error('\n1. Create a .env file in the project root:');
+    console.error('   echo "GOOGLE_API_KEY=your_key_here" > .env');
+    console.error('\n2. Export it in your terminal:');
+    console.error('   export GOOGLE_API_KEY=your_key_here');
+    console.error('   npm run demo:agents');
+    console.error('\n3. Pass it inline:');
+    console.error('   GOOGLE_API_KEY=your_key_here npm run demo:agents');
+    console.error('\nGet a free API key at: https://aistudio.google.com/apikey\n');
     process.exit(1);
   }
 
@@ -26,13 +42,13 @@ async function main() {
     type: 'invest',
     amount: 500,
     targetAccountId: 'taxable',
-    goalId: sarah.goals.find(g => g.name.includes('House'))?.id || sarah.goals[1]?.id
+    goalId: sarah.goals.find((g: FinancialGoal) => g.name.includes('House'))?.id || sarah.goals[1]?.id
   };
 
   console.log(`📊 Analyzing action for ${sarah.name}:`);
   console.log(`   Action: INVEST $${action.amount}`);
   console.log(`   Account: ${action.targetAccountId}`);
-  console.log(`   Goal: ${sarah.goals.find(g => g.id === action.goalId)?.name || 'Unknown'}\n`);
+  console.log(`   Goal: ${sarah.goals.find((g: FinancialGoal) => g.id === action.goalId)?.name || 'Unknown'}\n`);
 
   // Run simulation
   console.log('🔬 Running financial simulation...\n');
@@ -44,18 +60,18 @@ async function main() {
   );
 
   // Calculate historical metrics
-  const transactions = sarah.spendingCategories.flatMap(c => c.transactions);
+  const transactions = sarah.spendingCategories.flatMap((c: SpendingCategory) => c.transactions);
   const now = Date.now();
-  const transactionDates = transactions.map(t => t.date.getTime());
+  const transactionDates = transactions.map((t: Transaction) => t.date.getTime());
   const oldestTransaction = Math.min(...transactionDates);
   const monthsOfData = (now - oldestTransaction) / (1000 * 60 * 60 * 24 * 30);
 
   const monthlySpending = transactions
-    .filter(t => t.amount < 0)
-    .reduce((sum, t) => sum + Math.abs(t.amount), 0) / monthsOfData;
+    .filter((t: Transaction) => t.amount < 0)
+    .reduce((sum: number, t: Transaction) => sum + Math.abs(t.amount), 0) / monthsOfData;
 
   const categoryBreakdown: Record<string, number> = {};
-  transactions.forEach(t => {
+  transactions.forEach((t: Transaction) => {
     categoryBreakdown[t.category] = (categoryBreakdown[t.category] || 0) + Math.abs(t.amount);
   });
 
@@ -69,7 +85,7 @@ async function main() {
 
   // Run multi-agent analysis
   console.log('🚀 Launching LangChain multi-agent system...\n');
-  
+
   const orchestrator = new LangChainAgentOrchestrator();
   const result = await orchestrator.processDecision({
     user: sarah,
@@ -90,10 +106,10 @@ async function main() {
   console.log(`Confidence: ${(result.budgetingAnalysis.confidence * 100).toFixed(0)}%`);
   console.log(`Data Quality: ${result.budgetingAnalysis.data_quality}`);
   console.log('\nKey Findings:');
-  result.budgetingAnalysis.key_findings.forEach(f => console.log(`  • ${f}`));
+  result.budgetingAnalysis.key_findings.forEach((f: string) => console.log(`  • ${f}`));
   if (result.budgetingAnalysis.concerns.length > 0) {
     console.log('\nConcerns:');
-    result.budgetingAnalysis.concerns.forEach(c => console.log(`  ⚠️  ${c}`));
+    result.budgetingAnalysis.concerns.forEach((c: string) => console.log(`  ⚠️  ${c}`));
   }
   console.log('\nMetrics:');
   console.log(`  • Months of expenses remaining: ${result.budgetingAnalysis.budgeting_metrics.months_of_expenses_remaining.toFixed(2)}`);
@@ -105,7 +121,7 @@ async function main() {
   console.log(`Confidence: ${(result.investmentAnalysis.confidence * 100).toFixed(0)}%`);
   console.log(`Data Quality: ${result.investmentAnalysis.data_quality}`);
   console.log('\nKey Findings:');
-  result.investmentAnalysis.key_findings.forEach(f => console.log(`  • ${f}`));
+  result.investmentAnalysis.key_findings.forEach((f: string) => console.log(`  • ${f}`));
   if (result.investmentAnalysis.investment_metrics) {
     console.log('\nMetrics:');
     if (result.investmentAnalysis.investment_metrics.projected_value_5yr) {
@@ -122,7 +138,7 @@ async function main() {
   console.log(`Can Proceed: ${result.guardrailAnalysis.can_proceed ? '✅ YES' : '❌ NO'}`);
   if (result.guardrailAnalysis.violations.length > 0) {
     console.log('\nViolations:');
-    result.guardrailAnalysis.violations.forEach(v => {
+    result.guardrailAnalysis.violations.forEach((v) => {
       console.log(`  • ${v.rule_description}`);
       console.log(`    Severity: ${v.severity}`);
       console.log(`    ${v.violation_details}`);
@@ -130,7 +146,7 @@ async function main() {
   }
   if (result.guardrailAnalysis.warnings.length > 0) {
     console.log('\nWarnings:');
-    result.guardrailAnalysis.warnings.forEach(w => console.log(`  ⚠️  ${w}`));
+    result.guardrailAnalysis.warnings.forEach((w: string) => console.log(`  ⚠️  ${w}`));
   }
 
   console.log('\n\n✅ VALIDATION AGENT (META-ANALYSIS):');
@@ -145,7 +161,7 @@ async function main() {
 
   if (result.validationAnalysis.contradictions_found.length > 0) {
     console.log('\n⚠️  Contradictions Found:');
-    result.validationAnalysis.contradictions_found.forEach(c => {
+    result.validationAnalysis.contradictions_found.forEach((c) => {
       console.log(`  • ${c.agent_a} vs ${c.agent_b}: ${c.description} (${c.severity})`);
     });
   }

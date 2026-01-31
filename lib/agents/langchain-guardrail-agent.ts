@@ -10,7 +10,10 @@ import { GuardrailAnalysisSchema } from './schemas.js';
 export class LangChainGuardrailAgent extends LangChainBaseAgent<typeof GuardrailAnalysisSchema> {
   readonly agentName = 'Guardrail Agent';
   readonly schema = GuardrailAnalysisSchema;
-  readonly temperature = 0.0; // Deterministic for rule checking
+
+  constructor() {
+    super(0.0); // Deterministic for rule checking
+  }
 
   readonly systemPrompt = `You are a strict compliance and risk management agent for personal finance.
 
