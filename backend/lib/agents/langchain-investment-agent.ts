@@ -1,13 +1,14 @@
 /**
- * LangChain Investment Agent
+ * LangChain Investment Agent (RAG-Enhanced)
  * 
- * Analyzes investment decisions and goal alignment
+ * Analyzes investment decisions and goal alignment with historical context and financial knowledge
  */
 
-import { LangChainBaseAgent, type AgentContext } from './langchain-base.js';
+import { RAGEnhancedAgent, type EnhancedAgentContext } from './rag-enhanced-base.js';
 import { InvestmentAnalysisSchema } from './schemas.js';
+import type { AgentContext } from './langchain-base.js';
 
-export class LangChainInvestmentAgent extends LangChainBaseAgent<typeof InvestmentAnalysisSchema> {
+export class LangChainInvestmentAgent extends RAGEnhancedAgent<typeof InvestmentAnalysisSchema> {
   readonly agentName = 'Investment Agent';
   readonly schema = InvestmentAnalysisSchema;
 
@@ -19,6 +20,15 @@ export class LangChainInvestmentAgent extends LangChainBaseAgent<typeof Investme
 
 Your role is to evaluate investment decisions in the context of a user's complete financial picture.
 
+You have access to:
+1. User's historical investment and saving patterns via RAG retrieval
+2. Curated investment principles and best practices
+3. Current financial state and simulation results
+
+Use this context to make informed, personalized recommendations grounded in both the user's actual behavior and established investment principles.
+
+CRITICAL: When relevant historical patterns or investment principles are provided, reference them specifically in your reasoning to show evidence-based analysis.
+
 Key responsibilities:
 1. Assess goal alignment - does this investment advance stated financial goals?
 2. Evaluate time horizon vs. risk tolerance
@@ -29,6 +39,8 @@ Key responsibilities:
 Guidelines:
 - Match investment risk to time horizon (short-term goals = lower risk)
 - Consider the user's stated risk tolerance
+- Ground recommendations in user's actual past investment behavior when available
+- Cite investment principles when they apply
 - Be realistic about return assumptions - don't promise unrealistic gains
 - Acknowledge market risk and volatility
 - For non-investment actions, briefly note the opportunity cost
@@ -41,12 +53,35 @@ Critical thinking:
 
 Output your analysis in the specified JSON format.`;
 
-  protected buildAnalysisPrompt(context: AgentContext): string {
+  /**
+   * Customize historical query for investment focus
+   */
+  protected buildHistoricalQuery(context: AgentContext): string {
+    return `
+      investment decisions ${context.action.type} ${context.action.amount}
+      past investing behavior goal progress risk patterns portfolio allocation
+      ${context.action.targetAccountId || ''}
+    `.trim();
+  }
+
+  /**
+   * Customize knowledge query for investment focus
+   */
+  protected buildKnowledgeQuery(context: AgentContext): string {
+    return `
+      investment strategy time horizon risk management asset allocation
+      ${context.user.preferences.riskTolerance} portfolio diversification
+      ${context.action.type === 'invest' ? 'market returns compounding' : 'opportunity cost'}
+    `.trim();
+  }
+
+  protected buildAnalysisPrompt(context: AgentContext | EnhancedAgentContext): string {
     const { user, action, simulationResult } = context;
+    const ragContext = (context as EnhancedAgentContext).ragContext;
 
     // Only do deep analysis for invest actions
     if (action.type !== 'invest') {
-      return this.buildNonInvestmentPrompt(context);
+      return this.buildNonInvestmentPrompt(context, ragContext);
     }
 
     const goal = user.goals.find(g => g.id === action.goalId);
@@ -102,6 +137,16 @@ ${goalImpact ? `
 
 ${this.serializeSimulationResult(simulationResult)}
 
+${ragContext ? `
+═══════════════════════════════════════════════════════════
+${ragContext.historical}
+═══════════════════════════════════════════════════════════
+
+═══════════════════════════════════════════════════════════
+${ragContext.knowledge}
+═══════════════════════════════════════════════════════════
+` : ''}
+
 YOUR TASK:
 Evaluate this investment decision considering:
 1. Does the time horizon match the risk? (${yearsToDeadline.toFixed(1)} years to goal, risk tolerance: ${user.preferences.riskTolerance})
@@ -109,13 +154,14 @@ Evaluate this investment decision considering:
 3. Are the return assumptions realistic?
 4. What's the opportunity cost vs. keeping in savings?
 5. How does this affect overall portfolio diversification?
-6. Are there any timing concerns or better alternatives?
+${ragContext ? '6. What do historical investment patterns tell us?\n7. What investment principles apply to this situation?' : '6. Are there any timing concerns or better alternatives?'}
 
+${ragContext ? 'IMPORTANT: \n- Reference specific historical patterns when making recommendations\n- Cite relevant investment principles that support your analysis\n- Show evidence-based reasoning with sources\n' : ''}
 Provide specific, data-driven analysis.
     `.trim();
   }
 
-  private buildNonInvestmentPrompt(context: AgentContext): string {
+  private buildNonInvestmentPrompt(context: AgentContext | EnhancedAgentContext, ragContext?: { historical: string; knowledge: string }): string {
     const { action, simulationResult } = context;
 
     return `
@@ -123,13 +169,21 @@ The user is performing a ${action.type} action of ${this.formatCurrency(action.a
 
 ${this.serializeSimulationResult(simulationResult)}
 
+${ragContext ? `
+═══════════════════════════════════════════════════════════
+${ragContext.knowledge}
+═══════════════════════════════════════════════════════════
+` : ''}
+
 YOUR TASK:
 Briefly note:
 1. This is not an investment action
 2. The opportunity cost (this money could have been invested for growth)
 3. Whether there are any investment considerations the user should be aware of
+${ragContext ? '4. Any relevant principles from the knowledge base' : ''}
 
 Keep this analysis brief since investment is not the primary action.
     `.trim();
   }
 }
+

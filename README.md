@@ -1,32 +1,61 @@
 # Finance Bot - Financial Decision Platform
 
-An intelligent financial decision simulation system that shows users what happens if they save, invest, or spend money.
+An intelligent financial decision simulation system with RAG-enhanced multi-agent AI that shows users what happens if they save, invest, or spend money.
 
 ## 🏗️ Project Structure
 
 ```
 finance-bot/
-├── types/
-│   ├── financial.ts      # Core type definitions (18 interfaces)
-│   ├── sample-data.ts    # Detailed sample (Sarah Chen)
-│   └── index.ts          # Clean exports
-├── lib/
-│   ├── sample-data.ts         # Simplified demo data (Sarah)
-│   ├── simulation-engine.ts   # Core simulation functions ⭐ NEW
-│   ├── usage-example.ts       # Usage demonstrations
-│   ├── simulation-demo.ts     # Interactive simulation demo ⭐ NEW
-│   ├── __tests__/
-│   │   └── simulation-engine.test.ts  # Test suite ⭐ NEW
-│   ├── README.md              # Library documentation
-│   └── SIMULATION-ENGINE.md   # Simulation docs ⭐ NEW
-├── package.json          # Project dependencies
-├── tsconfig.json         # TypeScript configuration
-└── README.md            # This file
+├── backend/
+│   ├── types/
+│   │   └── financial.ts           # Core type definitions
+│   ├── lib/
+│   │   ├── sample-data.ts          # Demo user data
+│   │   ├── simulation-engine.ts    # Core simulation & apply functions
+│   │   ├── user-state-store.ts     # In-memory user state persistence
+│   │   ├── audit-log.ts            # Action history tracking
+│   │   ├── agents/                 # Multi-agent system
+│   │   │   ├── langchain-orchestrator.ts    # Main orchestrator
+│   │   │   ├── langchain-budgeting-agent.ts # RAG-enhanced budgeting
+│   │   │   ├── langchain-investment-agent.ts # RAG-enhanced investing
+│   │   │   ├── langchain-validation-agent.ts # RAG-enhanced validation
+│   │   │   ├── guardrail-agent.ts           # Deterministic constraints
+│   │   │   └── rag-enhanced-base.ts         # RAG base class
+│   │   ├── rag/                    # RAG (Retrieval-Augmented Generation)
+│   │   │   ├── vector-store.ts     # In-memory vector store manager
+│   │   │   ├── user-history-rag.ts # User history indexer & retriever
+│   │   │   ├── knowledge-base.ts   # Financial knowledge base
+│   │   │   └── initialize.ts       # RAG initialization utilities
+│   │   ├── chat/                   # Natural language chat interface
+│   │   │   └── chat-handler.ts
+│   │   └── __tests__/              # Comprehensive test suite
+│   │       ├── simulation-engine.test.ts
+│   │       ├── user-state-store.test.ts
+│   │       ├── audit-log.test.ts
+│   │       └── apply-action.test.ts
+│   ├── src/
+│   │   ├── server.ts               # Express API server
+│   │   └── __tests__/
+│   │       └── execute-api.test.ts # API endpoint tests
+│   └── scripts/
+│       └── test-rag.ts             # RAG system test
+├── package.json
+└── README.md
 ```
 
-## 📊 Type System Overview
+## ✨ Key Features
 
-The foundation of this platform is built on comprehensive TypeScript types that model the complete financial state and simulation system.
+### 1. **RAG-Enhanced Multi-Agent System** ⭐ NEW
+- **Retrieval-Augmented Generation** grounds recommendations in:
+  - User's historical spending and investment patterns
+  - Curated financial knowledge base (16 principles)
+  - Real behavioral data and established best practices
+- **Three Specialized Agents**:
+  - Budgeting Agent: Cash flow, liquidity, spending analysis
+  - Investment Agent: Goal alignment, risk assessment, opportunity cost
+  - Validation Agent: Consistency checking, contradiction detection
+- **Guardrail Agent**: Deterministic constraint enforcement
+- **Citations**: All recommendations reference specific historical patterns or principles
 
 ### Core Types
 
@@ -100,7 +129,9 @@ npm install
 # Copy example env file
 cp .env.example .env
 
-# Add your Google API key (get one at https://aistudio.google.com/apikey)
+# Add your API keys:
+# - GOOGLE_API_KEY: For Gemini LLMs and embeddings (get at https://aistudio.google.com/apikey)
+# - OPENAI_API_KEY: Alternative LLM provider (optional)
 export GOOGLE_API_KEY=your_key_here
 ```
 
@@ -128,6 +159,24 @@ This builds the project and runs the full backend unit test suite:
 - **audit-log** – appendExecutedAction, getHistory, getRecordById, getLastRecord, removeLastRecord
 - **apply-action** – apply_action for save/invest/spend, no mutation, correct outputs
 - **execute API** – POST /execute, GET /user/:id, GET /user/:id/history, POST /undo, GET/POST /freeze
+- **simulation-engine** – simulate_save, simulate_invest, simulate_spend, compare_options, scenarioIfDo/scenarioIfDont
+
+> **Note**: The execute-api tests require `required_permissions: ['network']` for the ephemeral test server.
+
+### Test RAG System ⭐ NEW
+
+```bash
+npm run build
+GOOGLE_API_KEY=your_key node dist/scripts/test-rag.js
+```
+
+Tests:
+- User history indexing (transactions, goals, spending patterns)
+- Historical context retrieval (similarity search)
+- Knowledge base initialization (16 financial principles)
+- Financial knowledge retrieval
+
+> **Note**: Requires valid Google API key with embedding quota available.
 - **simulation-engine** – simulate_save, simulate_invest, compare_options, constraints
 
 The execute-api test starts the app on a random port (requires network permission in restricted environments).

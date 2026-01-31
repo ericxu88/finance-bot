@@ -21,6 +21,7 @@ import { MockAgentOrchestrator } from '../lib/agents/mock-orchestrator.js';
 import { analyzeFinancialHealth, generateGoalSummary } from '../lib/recommendation-engine.js';
 import { demoScenarios, getScenarioById } from '../lib/demo-scenarios.js';
 import { ChatHandler } from '../lib/chat/chat-handler.js';
+import { initializeKnowledgeBase, initializeRAGForUser } from '../lib/rag/initialize.js';
 import type { UserProfile, FinancialAction } from '../types/financial.js';
 
 const app = express();
@@ -28,6 +29,13 @@ const port = process.env.PORT ? Number(process.env.PORT) : 3000;
 
 /** Optional: freeze automation (no background automation in MVP; flag for future or UI message). */
 let automationFrozen = false;
+
+// Initialize RAG knowledge base on startup (unless in test mode)
+if (process.env.TEST !== '1') {
+  initializeKnowledgeBase().catch(error => {
+    console.error('[Server] Failed to initialize RAG knowledge base:', error);
+  });
+}
 
 app.use(express.json({ limit: '1mb' }));
 
@@ -238,6 +246,13 @@ app.post('/execute', (req: Request, res: Response) => {
   const user = userId != null
     ? userStateStore.getOrCreate(userId, sampleUser)
     : bodyUser!;
+
+  // Initialize RAG for this user if not already done (non-blocking)
+  if (userId != null && process.env.TEST !== '1') {
+    initializeRAGForUser(user).catch(error => {
+      console.warn(`[/execute] RAG initialization failed for user ${userId}:`, error);
+    });
+  }
 
   const actionForApply: FinancialAction = {
     type: action.type,

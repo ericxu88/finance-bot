@@ -1,13 +1,14 @@
 /**
- * LangChain Budgeting Agent
+ * LangChain Budgeting Agent (RAG-Enhanced)
  * 
- * Analyzes cash flow, liquidity, and budget impacts
+ * Analyzes cash flow, liquidity, and budget impacts with historical context and financial knowledge
  */
 
-import { LangChainBaseAgent, type AgentContext } from './langchain-base.js';
+import { RAGEnhancedAgent, type EnhancedAgentContext } from './rag-enhanced-base.js';
 import { BudgetingAnalysisSchema } from './schemas.js';
+import type { AgentContext } from './langchain-base.js';
 
-export class LangChainBudgetingAgent extends LangChainBaseAgent<typeof BudgetingAnalysisSchema> {
+export class LangChainBudgetingAgent extends RAGEnhancedAgent<typeof BudgetingAnalysisSchema> {
   readonly agentName = 'Budgeting Agent';
   readonly schema = BudgetingAnalysisSchema;
 
@@ -19,6 +20,15 @@ export class LangChainBudgetingAgent extends LangChainBaseAgent<typeof Budgeting
 
 Your role is to evaluate whether a proposed financial action fits within a user's budget and spending patterns.
 
+You have access to:
+1. User's historical spending patterns via RAG retrieval
+2. Curated financial knowledge and best practices
+3. Current financial state and simulation results
+
+Use this context to make informed, personalized recommendations grounded in both the user's actual behavior and established financial principles.
+
+CRITICAL: When relevant historical patterns or financial principles are provided, reference them specifically in your reasoning to show evidence-based analysis.
+
 Key responsibilities:
 1. Analyze cash flow and liquidity after the proposed action
 2. Assess whether the action leaves sufficient buffer for unexpected expenses
@@ -29,6 +39,8 @@ Key responsibilities:
 Guidelines:
 - Be conservative with liquidity - people should maintain 1-2 months of expenses in checking
 - Consider spending variance - high variance = need bigger buffer
+- Ground recommendations in user's actual past behavior when available
+- Cite financial principles when they apply
 - Flag over-budget categories
 - Assess data quality honestly - limited historical data reduces confidence
 - Provide specific, actionable findings
@@ -36,8 +48,30 @@ Guidelines:
 
 Output your analysis in the specified JSON format.`;
 
-  protected buildAnalysisPrompt(context: AgentContext): string {
+  /**
+   * Customize historical query for budgeting focus
+   */
+  protected buildHistoricalQuery(context: AgentContext): string {
+    return `
+      spending patterns ${context.action.type} ${context.action.amount}
+      past similar decisions budget utilization cash flow
+      ${context.action.category || ''}
+    `.trim();
+  }
+
+  /**
+   * Customize knowledge query for budgeting focus
+   */
+  protected buildKnowledgeQuery(context: AgentContext): string {
+    return `
+      budgeting cash flow management liquidity emergency fund
+      spending variance ${context.user.preferences.liquidityPreference}
+    `.trim();
+  }
+
+  protected buildAnalysisPrompt(context: AgentContext | EnhancedAgentContext): string {
     const { user, action, simulationResult, historicalMetrics } = context;
+    const ragContext = (context as EnhancedAgentContext).ragContext;
 
     // Calculate key metrics
     const totalMonthlyExpenses =
@@ -84,15 +118,27 @@ AFTER THIS ACTION:
 - Checking Balance: ${this.formatCurrency(checkingAfter)}
 - Months of Expenses in Checking: ${monthsOfExpensesRemaining.toFixed(2)} months
 
+${ragContext ? `
+═══════════════════════════════════════════════════════════
+${ragContext.historical}
+═══════════════════════════════════════════════════════════
+
+═══════════════════════════════════════════════════════════
+${ragContext.knowledge}
+═══════════════════════════════════════════════════════════
+` : ''}
+
 YOUR TASK:
 Analyze whether this action is prudent from a budgeting perspective. Consider:
 1. Will the user have sufficient liquidity for day-to-day expenses?
 2. Does the user have adequate buffer for unexpected expenses given their spending variance?
 3. How does this affect budget categories?
-4. Is the historical data sufficient to make a confident recommendation?
-5. What are the specific risks or concerns?
+${ragContext ? '4. What do historical patterns tell us about this decision?\n5. What financial principles apply to this situation?' : '4. Is the historical data sufficient to make a confident recommendation?'}
+${ragContext ? '6' : '5'}. What are the specific risks or concerns?
 
+${ragContext ? 'IMPORTANT: \n- Reference specific historical patterns when making recommendations\n- Cite relevant financial principles that support your analysis\n- Show evidence-based reasoning, not just rules of thumb\n' : ''}
 Provide a thorough analysis with specific numbers and clear reasoning.
     `.trim();
   }
 }
+

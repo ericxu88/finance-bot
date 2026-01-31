@@ -1,10 +1,10 @@
 /**
- * LangChain Validation Agent
+ * LangChain Validation Agent (RAG-Enhanced)
  * 
- * Meta-analyst that synthesizes all agent outputs
+ * Meta-analyst that synthesizes all agent outputs with historical context
  */
 
-import { LangChainBaseAgent, type AgentContext } from './langchain-base.js';
+import { RAGEnhancedAgent, type EnhancedAgentContext } from './rag-enhanced-base.js';
 import { 
   ValidationAnalysisSchema, 
   BudgetingAnalysisSchema,
@@ -12,6 +12,7 @@ import {
   GuardrailAnalysisSchema
 } from './schemas.js';
 import type { z } from 'zod';
+import type { AgentContext } from './langchain-base.js';
 
 interface ValidationContext extends AgentContext {
   budgetingAnalysis: z.infer<typeof BudgetingAnalysisSchema>;
@@ -19,7 +20,7 @@ interface ValidationContext extends AgentContext {
   guardrailAnalysis: z.infer<typeof GuardrailAnalysisSchema>;
 }
 
-export class LangChainValidationAgent extends LangChainBaseAgent<typeof ValidationAnalysisSchema> {
+export class LangChainValidationAgent extends RAGEnhancedAgent<typeof ValidationAnalysisSchema> {
   readonly agentName = 'Validation Agent';
   readonly schema = ValidationAnalysisSchema;
 
@@ -34,6 +35,7 @@ Your role is to:
 2. Detect CONTRADICTIONS (e.g. one approves, one strongly_opposes)
 3. Surface RISK FLAGS (liquidity, data insufficiency, variance)
 4. Provide a clear SYNTHESIS summary and decision paths
+5. Reference historical patterns and established principles when available
 
 You do NOT have authority to veto. The final decision is computed from domain agents + guardrail by the orchestrator:
 - Guardrail blocked → hard stop (blocked)
@@ -46,9 +48,30 @@ Guidelines:
 - "Approve with caution" from all domain agents should NOT be described as "do not proceed" — describe risks and that the user CAN proceed with caution
 - Weight agent opinions by confidence and data quality
 - Be honest about limitations; suggest safer alternatives (e.g. "try a smaller amount") when relevant
+- When RAG context is available, cite specific historical patterns or principles that inform your analysis
 - consensus_level: use "unanimous" only when both domain agents are in {approve, approve_with_caution, strongly_approve}; use "divided" when one approves and one opposes
 
 Output a comprehensive validation in the specified JSON format.`;
+
+  /**
+   * Customize historical query for validation focus
+   */
+  protected buildHistoricalQuery(context: AgentContext): string {
+    return `
+      past agent recommendations decision outcomes similar actions
+      ${context.action.type} ${context.action.amount} results patterns
+    `.trim();
+  }
+
+  /**
+   * Customize knowledge query for validation focus
+   */
+  protected buildKnowledgeQuery(context: AgentContext): string {
+    return `
+      financial decision making validation risk assessment
+      decision frameworks ${context.user.preferences.riskTolerance}
+    `.trim();
+  }
 
   async analyzeWithAgentOutputs(
     context: AgentContext,
@@ -69,6 +92,8 @@ Output a comprehensive validation in the specified JSON format.`;
       investmentAnalysis,
       guardrailAnalysis
     } = context as ValidationContext;
+
+    const ragContext = (context as EnhancedAgentContext).ragContext;
 
     return `
 META-VALIDATION REQUEST
@@ -155,6 +180,16 @@ HISTORICAL DATA CONTEXT
 - Average monthly spending: ${this.formatCurrency(historicalMetrics.avgMonthlySpending)}
 - Spending variance: ${this.formatPercent(historicalMetrics.spendingVariance)}
 
+${ragContext ? `
+═══════════════════════════════════════════════════════════
+${ragContext.historical}
+═══════════════════════════════════════════════════════════
+
+═══════════════════════════════════════════════════════════
+${ragContext.knowledge}
+═══════════════════════════════════════════════════════════
+` : ''}
+
 ═══════════════════════════════════════════════════════════
 YOUR VALIDATION TASK
 ═══════════════════════════════════════════════════════════
@@ -186,7 +221,18 @@ YOUR VALIDATION TASK
    - What happens if they don't?
    - What's the recommended path?
 
-Your overall_recommendation is for display only; the orchestrator computes the actual decision from domain agents + guardrail. When guardrail can_proceed = true and both domain agents recommend approve or approve_with_caution, use overall_recommendation "proceed_with_caution" or "proceed". Do NOT say "do_not_proceed" when no agent said oppose. Describe risks and that the user can proceed with caution when appropriate.
+${ragContext ? `6. REFERENCE CONTEXT:
+   - Cite specific historical patterns that inform this validation
+   - Reference relevant financial principles from the knowledge base
+   - Show how evidence supports or contradicts agent recommendations
+` : ''}
+
+IMPORTANT:
+- Your overall_recommendation is for display only; the orchestrator computes the actual decision from domain agents + guardrail
+- When guardrail can_proceed = true and both domain agents recommend approve or approve_with_caution, use overall_recommendation "proceed_with_caution" or "proceed"
+- Do NOT say "do_not_proceed" when no agent said oppose
+- Describe risks and that the user can proceed with caution when appropriate
+- When RAG context is provided, cite specific patterns and principles in your reasoning
 
 Provide a comprehensive, synthesized analysis that helps the user make an informed decision.
     `.trim();
