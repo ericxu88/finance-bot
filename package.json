@@ -15,6 +15,9 @@
     "test:real-agents": "npm run build && node dist/scripts/test-real-agents.js",
     "list-models": "npm run build && node dist/scripts/list-models.js",
     "test:api-real": "npm run build && node dist/scripts/test-api-real.js",
+    "test:chat": "npm run build && node dist/src/__tests__/chat.test.js",
+    "test:chat-real": "npm run build && node dist/scripts/test-chat-real.js",
+    "demo:chat": "npm run build && node dist/scripts/demo-chat.js",
     "validate": "npm run build && node dist/validate-types.js",
     "start:api": "node dist/src/server.js"
   },

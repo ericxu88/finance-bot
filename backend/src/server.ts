@@ -17,6 +17,7 @@ import { LangChainAgentOrchestrator } from '../lib/agents/langchain-orchestrator
 import { MockAgentOrchestrator } from '../lib/agents/mock-orchestrator.js';
 import { analyzeFinancialHealth, generateGoalSummary } from '../lib/recommendation-engine.js';
 import { demoScenarios, getScenarioById } from '../lib/demo-scenarios.js';
+import { ChatHandler } from '../lib/chat/chat-handler.js';
 import type { UserProfile, FinancialAction } from '../types/financial.js';
 
 const app = express();
@@ -389,7 +390,7 @@ app.post('/goals/summary', (req: Request, res: Response) => {
     const totalTargeted = goalSummaries.reduce((sum, g) => sum + g.targetAmount, 0);
     const totalSaved = goalSummaries.reduce((sum, g) => sum + g.currentAmount, 0);
     const overallProgress = totalTargeted > 0 ? (totalSaved / totalTargeted) * 100 : 0;
-    
+
     const goalsOnTrack = goalSummaries.filter(g => g.status === 'on_track' || g.status === 'completed').length;
     const goalsAtRisk = goalSummaries.filter(g => g.status === 'at_risk').length;
 
@@ -516,7 +517,7 @@ app.post('/analyze/stream', async (req: Request, res: Response): Promise<void> =
 
     // Step 1: Run simulation (instant)
     sendEvent('status', { stage: 'simulation', message: 'Running simulation...' });
-    
+
     let simulationResult;
     switch (action.type) {
       case 'save':
@@ -623,7 +624,7 @@ app.post('/analyze/stream', async (req: Request, res: Response): Promise<void> =
       sendEvent('agent', { agent: 'validation', result: validationAnalysis, elapsed: Date.now() - startTime });
 
       // Build final result
-      const shouldProceed = 
+      const shouldProceed =
         validationAnalysis.overall_recommendation === 'proceed_confidently' ||
         validationAnalysis.overall_recommendation === 'proceed' ||
         (validationAnalysis.overall_recommendation === 'proceed_with_caution' && guardrailAnalysis.can_proceed);
@@ -654,6 +655,168 @@ app.post('/analyze/stream', async (req: Request, res: Response): Promise<void> =
   }
 });
 
+// =============================================================================
+// CHAT ENDPOINTS
+// =============================================================================
+
+const chatRequestSchema = z.object({
+  message: z.string().min(1).max(1000),
+  userId: z.string().min(1).default('default_user'),
+  conversationId: z.string().optional(),
+  userProfile: userProfileSchema.optional(),
+  /** Use fast mode: single LLM call instead of multi-agent (5 calls). ~4x faster. */
+  fastMode: z.boolean().optional().default(false),
+  /** Skip intent parsing by providing the structured action directly */
+  parsedAction: z.object({
+    type: z.enum(['save', 'invest', 'spend']),
+    amount: z.number().positive(),
+    goalId: z.string().optional(),
+    targetAccountId: z.enum(['taxable', 'rothIRA', 'traditional401k']).optional(),
+  }).optional(),
+});
+
+// Initialize chat handler
+const chatHandler = new ChatHandler();
+
+/**
+ * POST /chat
+ * 
+ * Chat-based interface for financial decision making.
+ * Users can ask questions in natural language and receive conversational responses.
+ * 
+ * Examples:
+ * - "Should I invest $500 for my house fund?"
+ * - "What happens if I save $300?"
+ * - "Compare saving vs investing"
+ * - "What should I do with extra money?"
+ * - "How are my goals doing?"
+ */
+app.post('/chat', async (req: Request, res: Response) => {
+  const parsed = chatRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: 'Invalid request payload',
+      details: parsed.error.flatten(),
+    });
+  }
+
+  const { message, userId, conversationId, userProfile, fastMode, parsedAction } = parsed.data;
+
+  // Use provided profile or fall back to sample user for demos
+  const profile = userProfile || sampleUser;
+
+  try {
+    const response = await chatHandler.handleMessage({
+      message,
+      userId,
+      conversationId,
+      userProfile: profile,
+      fastMode,
+      parsedAction,
+    });
+
+    return res.status(200).json({
+      conversationId: response.conversationId,
+      reply: response.reply.message,
+      summary: response.reply.summary,
+      details: response.reply.details,
+      suggestedFollowUps: response.reply.suggestedFollowUps,
+      shouldProceed: response.reply.shouldProceed,
+      confidence: response.reply.confidence,
+      intent: {
+        type: response.intent.intent_type,
+        action: response.intent.action,
+        mentionedGoals: response.intent.mentioned_goals,
+        mentionedAmounts: response.intent.mentioned_amounts,
+      },
+      metadata: {
+        executionTimeMs: response.executionTimeMs,
+        timestamp: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error('Error in /chat endpoint:', error);
+    return res.status(500).json({
+      error: 'Chat processing failed',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * POST /chat/stream
+ * 
+ * Streaming version of chat for real-time UI updates.
+ * Uses Server-Sent Events to stream progress and partial results.
+ */
+app.post('/chat/stream', async (req: Request, res: Response): Promise<void> => {
+  const parsed = chatRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({
+      error: 'Invalid request payload',
+      details: parsed.error.flatten(),
+    });
+    return;
+  }
+
+  const { message, userId, conversationId, userProfile } = parsed.data;
+  const profile = userProfile || sampleUser;
+
+  // Set up SSE
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const sendEvent = (event: string, data: unknown) => {
+    res.write(`event: ${event}\n`);
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  try {
+    const startTime = Date.now();
+
+    sendEvent('status', { stage: 'parsing', message: 'Understanding your request...' });
+
+    const response = await chatHandler.handleMessage({
+      message,
+      userId,
+      conversationId,
+      userProfile: profile,
+    });
+
+    sendEvent('intent', {
+      type: response.intent.intent_type,
+      confidence: response.intent.confidence,
+      elapsed: Date.now() - startTime,
+    });
+
+    if (response.rawAnalysis) {
+      sendEvent('analysis', {
+        available: true,
+        elapsed: Date.now() - startTime,
+      });
+    }
+
+    sendEvent('complete', {
+      conversationId: response.conversationId,
+      reply: response.reply.message,
+      summary: response.reply.summary,
+      suggestedFollowUps: response.reply.suggestedFollowUps,
+      shouldProceed: response.reply.shouldProceed,
+      confidence: response.reply.confidence,
+      executionTimeMs: response.executionTimeMs,
+    });
+
+    res.end();
+  } catch (error) {
+    console.error('Error in /chat/stream endpoint:', error);
+    sendEvent('error', { message: error instanceof Error ? error.message : String(error) });
+    res.end();
+  }
+});
+
 app.listen(port, () => {
   console.log(`API listening on http://localhost:${port}`);
+  console.log(`Chat endpoint available at POST /chat`);
 });
