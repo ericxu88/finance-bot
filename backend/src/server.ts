@@ -469,6 +469,64 @@ app.post('/goals/summary', (req: Request, res: Response) => {
 });
 
 // ============================================================================
+// USER PROFILE STORAGE
+// ============================================================================
+
+// In-memory storage for user profiles (in production, use a database)
+const userProfiles: Map<string, UserProfile> = new Map();
+
+// Initialize default user profile
+userProfiles.set('sample', sampleUser);
+userProfiles.set('default', sampleUser);
+
+/**
+ * Get or create user profile
+ */
+function getUserProfile(userId: string): UserProfile {
+  const existing = userProfiles.get(userId);
+  if (existing) {
+    return existing;
+  }
+
+  // Create new user profile based on sample
+  const newProfile: UserProfile = {
+    ...sampleUser,
+    id: userId,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  userProfiles.set(userId, newProfile);
+  return newProfile;
+}
+
+/**
+ * Update user profile
+ */
+function updateUserProfile(userId: string, profile: UserProfile): void {
+  userProfiles.set(userId, {
+    ...profile,
+    updatedAt: new Date(),
+  });
+}
+
+/**
+ * GET /user/profile
+ * Get current user profile with balances and goals
+ */
+app.get('/user/profile', (req: Request, res: Response) => {
+  const userId = (req.query.userId as string) || 'default';
+  const profile = getUserProfile(userId);
+
+  return res.status(200).json({
+    profile,
+    metadata: {
+      timestamp: new Date().toISOString(),
+    },
+  });
+});
+
+// ============================================================================
 // GOAL MANAGEMENT
 // ============================================================================
 
@@ -508,7 +566,7 @@ app.post('/goals', (req: Request, res: Response) => {
 
   const { name, targetAmount, currentAmount, deadline, priority, userId } = parsed.data;
   const goalUserId = userId || 'default';
-  
+
   const newGoal = {
     id: parsed.data.id || `goal_${Date.now()}_${Math.random().toString(36).substring(7)}`,
     name,
@@ -519,10 +577,26 @@ app.post('/goals', (req: Request, res: Response) => {
     createdAt: new Date().toISOString(),
   };
 
-  // Get or create user's goals list
+  // Get or create user's goals list (for backward compatibility)
   const userGoals = userCreatedGoals.get(goalUserId) || [];
   userGoals.push(newGoal);
   userCreatedGoals.set(goalUserId, userGoals);
+
+  // ALSO update the user profile to include this goal
+  const userProfile = getUserProfile(goalUserId);
+  const profileGoal = {
+    id: newGoal.id,
+    name: newGoal.name,
+    targetAmount: newGoal.targetAmount,
+    currentAmount: newGoal.currentAmount,
+    deadline: new Date(newGoal.deadline),
+    priority: newGoal.priority,
+    timeHorizon: 'short' as const, // Default to short-term
+    linkedAccountIds: ['savings'], // Default to savings account
+  };
+
+  userProfile.goals.push(profileGoal);
+  updateUserProfile(goalUserId, userProfile);
 
   console.log(`[Goals] Created goal "${name}" for user ${goalUserId}`);
 
@@ -866,8 +940,9 @@ app.post('/chat', async (req: Request, res: Response) => {
 
   const { message, userId, conversationId, userProfile, fastMode, parsedAction } = parsed.data;
 
-  // Use provided profile or fall back to sample user for demos
-  const profile = userProfile || sampleUser;
+  // Use provided profile or get from storage
+  const actualUserId = userId || 'default';
+  const profile = userProfile || getUserProfile(actualUserId);
 
   try {
     const response = await chatHandler.handleMessage({
@@ -878,6 +953,12 @@ app.post('/chat', async (req: Request, res: Response) => {
       fastMode,
       parsedAction,
     });
+
+    // Save updated user profile if it was modified
+    if (response.updatedUserProfile) {
+      updateUserProfile(actualUserId, response.updatedUserProfile);
+      console.log(`[Chat] User profile updated for ${actualUserId}`);
+    }
 
     return res.status(200).json({
       conversationId: response.conversationId,
@@ -893,6 +974,7 @@ app.post('/chat', async (req: Request, res: Response) => {
         mentionedGoals: response.intent.mentioned_goals,
         mentionedAmounts: response.intent.mentioned_amounts,
       },
+      updatedUserProfile: response.updatedUserProfile, // Return updated profile to frontend
       metadata: {
         executionTimeMs: response.executionTimeMs,
         timestamp: new Date().toISOString(),
@@ -924,7 +1006,8 @@ app.post('/chat/stream', async (req: Request, res: Response): Promise<void> => {
   }
 
   const { message, userId, conversationId, userProfile } = parsed.data;
-  const profile = userProfile || sampleUser;
+  const actualUserId = userId || 'default';
+  const profile = userProfile || getUserProfile(actualUserId);
 
   // Set up SSE
   res.setHeader('Content-Type', 'text/event-stream');
@@ -949,6 +1032,12 @@ app.post('/chat/stream', async (req: Request, res: Response): Promise<void> => {
       userProfile: profile,
     });
 
+    // Save updated user profile if it was modified
+    if (response.updatedUserProfile) {
+      updateUserProfile(actualUserId, response.updatedUserProfile);
+      console.log(`[Chat Stream] User profile updated for ${actualUserId}`);
+    }
+
     sendEvent('intent', {
       type: response.intent.intent_type,
       confidence: response.intent.confidence,
@@ -970,6 +1059,7 @@ app.post('/chat/stream', async (req: Request, res: Response): Promise<void> => {
       shouldProceed: response.reply.shouldProceed,
       confidence: response.reply.confidence,
       executionTimeMs: response.executionTimeMs,
+      updatedUserProfile: response.updatedUserProfile,
     });
 
     res.end();

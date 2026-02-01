@@ -55,6 +55,12 @@ export interface ChatResponse {
   intent: ParsedIntent;
   rawAnalysis?: unknown;
   executionTimeMs: number;
+  updatedUserProfile?: UserProfile;
+}
+
+interface HandlerResult {
+  reply: FormattedResponse;
+  updatedUserProfile?: UserProfile;
 }
 
 export class ChatHandler {
@@ -77,11 +83,15 @@ export class ChatHandler {
     const startTime = Date.now();
     const { message, userId, userProfile, fastMode: requestFastMode, parsedAction } = request;
     const useFastMode = requestFastMode ?? this.fastMode;
-    
+
+    // Track user profile - will be updated if actions modify it
+    let currentUserProfile = userProfile;
+    let profileWasUpdated = false;
+
     // Get or create conversation context
     let conversationId = request.conversationId || `conv_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     let context = conversationStore.get(conversationId);
-    
+
     if (!context) {
       context = conversationStore.create(conversationId, userId);
     }
@@ -138,56 +148,61 @@ export class ChatHandler {
       
       switch (intent.intent_type) {
         case 'simulate_action':
-          const result = await this.handleSimulateAction(intent, userProfile, context, useFastMode);
+          const result = await this.handleSimulateAction(intent, currentUserProfile, context, useFastMode);
           reply = result.reply;
           rawAnalysis = result.rawAnalysis;
           break;
-          
+
         case 'compare_options':
-          const compResult = await this.handleCompareOptions(intent, userProfile);
+          const compResult = await this.handleCompareOptions(intent, currentUserProfile);
           reply = compResult.reply;
           rawAnalysis = compResult.rawAnalysis;
           break;
-          
+
         case 'get_recommendation':
-          reply = await this.handleGetRecommendation(userProfile);
+          reply = await this.handleGetRecommendation(currentUserProfile);
           break;
-          
+
         case 'check_goal_progress':
-          reply = this.handleCheckGoalProgress(userProfile);
+          reply = this.handleCheckGoalProgress(currentUserProfile);
           break;
-          
+
         case 'explain_tradeoffs':
-          reply = await this.handleExplainTradeoffs(intent, userProfile);
+          reply = await this.handleExplainTradeoffs(intent, currentUserProfile);
           break;
-          
+
         case 'clarification_needed':
           reply = formatClarificationResponse(
             intent.clarification_question || "Could you tell me more about what you'd like to do?",
-            userProfile
+            currentUserProfile
           );
           break;
-        
+
         // NEW: Action intents that modify user data
         case 'transfer_money':
-          reply = await this.handleTransferMoney(intent, userProfile, context);
+          reply = await this.handleTransferMoney(intent, currentUserProfile, context);
           break;
-          
+
         case 'create_goal':
-          reply = await this.handleCreateGoal(intent, userProfile, context);
+          reply = await this.handleCreateGoal(intent, currentUserProfile, context);
           break;
-          
+
         case 'update_budget':
-          reply = await this.handleUpdateBudget(intent, userProfile, context);
+          reply = await this.handleUpdateBudget(intent, currentUserProfile, context);
           break;
-          
+
         case 'execute_action':
-          reply = await this.handleExecuteAction(intent, userProfile, context, useFastMode);
+          const executeResult = await this.handleExecuteAction(intent, currentUserProfile, context, useFastMode);
+          reply = executeResult.reply;
+          if (executeResult.updatedUserProfile) {
+            currentUserProfile = executeResult.updatedUserProfile;
+            profileWasUpdated = true;
+          }
           break;
-          
+
         case 'general_question':
         default:
-          reply = await this.handleGeneralQuestion(message, userProfile, context);
+          reply = await this.handleGeneralQuestion(message, currentUserProfile, context);
           break;
       }
       
@@ -214,6 +229,7 @@ export class ChatHandler {
         intent,
         rawAnalysis,
         executionTimeMs: Date.now() - startTime,
+        updatedUserProfile: profileWasUpdated ? currentUserProfile : undefined,
       };
       
     } catch (error) {
@@ -725,7 +741,7 @@ export class ChatHandler {
     userProfile: UserProfile,
     context: ConversationContext,
     _useFastMode: boolean
-  ): Promise<FormattedResponse> {
+  ): Promise<HandlerResult> {
     // Check if there's a pending action to execute
     if (!context.pendingAction) {
       // Try to find the last suggested action from conversation
@@ -733,19 +749,22 @@ export class ChatHandler {
       
       if (!lastAction) {
         return {
-          message: `I'm not sure what action you'd like me to execute. Could you be more specific?\n\n` +
-            `For example:\n` +
-            `• "Transfer $500 from checking to savings"\n` +
-            `• "Create a goal for a car"\n` +
-            `• "Invest $300 in my taxable account"`,
-          summary: 'No pending action',
-          suggestedFollowUps: [
-            'Transfer $500 from checking to savings',
-            'Save $300 toward my emergency fund',
-            'Create a goal for a vacation',
-          ],
-          shouldProceed: false,
-          confidence: 'low',
+          reply: {
+            message: `I'm not sure what action you'd like me to execute. Could you be more specific?\n\n` +
+              `For example:\n` +
+              `• "Transfer $500 from checking to savings"\n` +
+              `• "Create a goal for a car"\n` +
+              `• "Invest $300 in my taxable account"`,
+            summary: 'No pending action',
+            suggestedFollowUps: [
+              'Transfer $500 from checking to savings',
+              'Save $300 toward my emergency fund',
+              'Create a goal for a vacation',
+            ],
+            shouldProceed: false,
+            confidence: 'low',
+          },
+          updatedUserProfile: undefined,
         };
       }
       
@@ -802,35 +821,41 @@ export class ChatHandler {
     
     // Clear pending action after execution attempt
     context.pendingAction = undefined;
-    
-    // Return result
+
+    // Return result with updated user profile if action succeeded
     if (result.success) {
       return {
-        message: `✅ **Done!** ${result.message}\n\n${result.details || ''}\n\n` +
-          (result.changes && result.changes.length > 0 
-            ? `**Changes made:**\n${result.changes.map(c => `• ${c.field}: $${typeof c.oldValue === 'number' ? c.oldValue.toLocaleString() : c.oldValue} → $${typeof c.newValue === 'number' ? c.newValue.toLocaleString() : c.newValue}`).join('\n')}`
-            : ''),
-        summary: result.message,
-        suggestedFollowUps: [
-          'Check my goal progress',
-          'What should I do next?',
-          "Show my account balances",
-        ],
-        shouldProceed: true,
-        confidence: 'high',
+        reply: {
+          message: `✅ **Done!** ${result.message}\n\n${result.details || ''}\n\n` +
+            (result.changes && result.changes.length > 0
+              ? `**Changes made:**\n${result.changes.map(c => `• ${c.field}: $${typeof c.oldValue === 'number' ? c.oldValue.toLocaleString() : c.oldValue} → $${typeof c.newValue === 'number' ? c.newValue.toLocaleString() : c.newValue}`).join('\n')}`
+              : ''),
+          summary: result.message,
+          suggestedFollowUps: [
+            'Check my goal progress',
+            'What should I do next?',
+            "Show my account balances",
+          ],
+          shouldProceed: true,
+          confidence: 'high',
+        },
+        updatedUserProfile: result.updatedUser,
       };
     } else {
       return {
-        message: `❌ **Could not complete:** ${result.message}\n\n` +
-          `Would you like to try a different amount or action?`,
-        summary: 'Action failed',
-        suggestedFollowUps: [
-          'Try a smaller amount',
-          'Check my account balances',
-          'What can I afford?',
-        ],
-        shouldProceed: false,
-        confidence: 'high',
+        reply: {
+          message: `❌ **Could not complete:** ${result.message}\n\n` +
+            `Would you like to try a different amount or action?`,
+          summary: 'Action failed',
+          suggestedFollowUps: [
+            'Try a smaller amount',
+            'Check my account balances',
+            'What can I afford?',
+          ],
+          shouldProceed: false,
+          confidence: 'high',
+        },
+        updatedUserProfile: undefined,
       };
     }
   }

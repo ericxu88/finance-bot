@@ -1,9 +1,17 @@
 /**
  * Compass — Financial Intelligence Frontend
  * API integration and UI logic
- * 
- * Version: 2.0 - Fixed SSE parsing and response handling
+ *
+ * Version: 3.3 - SYNTAX FIX (Feb 1, 2026)
+ * - FIXED: Syntax error from incomplete ternary operator
+ * - FIXED: Removed non-existent /goals/summary/sample endpoint
+ * - FIXED: Chat and dashboard now use same user profile
+ * - User profile persists after transfers/actions
+ * - Dashboard updates dynamically with real balances
+ * - Goals loaded directly from user profile
  */
+
+console.log('💰 Finance Bot v3.3 loaded - Ready to roll! 🚀');
 
 // ============================================================================
 // CONFIGURATION
@@ -11,9 +19,59 @@
 
 const API_BASE = 'http://localhost:3000';
 let currentConversationId = null;
+let currentUserProfile = null; // Store current user profile for real-time updates
+const CURRENT_USER_ID = 'default'; // Consistent user ID across all requests
 
 // Analysis mode: 'fast' = single AI call, 'detailed' = multi-agent analysis
 let analysisMode = 'fast';
+
+// ============================================================================
+// USER PROFILE MANAGEMENT
+// ============================================================================
+
+/**
+ * Fetch current user profile from server
+ */
+async function fetchUserProfile() {
+  try {
+    const response = await fetch(`${API_BASE}/user/profile?userId=${CURRENT_USER_ID}`);
+    if (response.ok) {
+      const data = await response.json();
+      currentUserProfile = data.profile;
+      console.log('[Profile] Loaded user profile:', currentUserProfile.name, 'with balances:', {
+        checking: currentUserProfile.accounts.checking,
+        savings: currentUserProfile.accounts.savings
+      });
+      return currentUserProfile;
+    }
+  } catch (error) {
+    console.error('[Profile] Failed to fetch profile:', error);
+  }
+  return null;
+}
+
+/**
+ * Update user profile after an action (like transfer, goal creation, etc.)
+ */
+async function updateUserProfile(updatedProfile) {
+  if (updatedProfile) {
+    currentUserProfile = updatedProfile;
+    console.log('[Profile] Updated user profile - accounts:', {
+      checking: updatedProfile.accounts.checking,
+      savings: updatedProfile.accounts.savings
+    });
+
+    // Always update the assets display (sidebar shows on all views)
+    updateAssetsDisplay();
+
+    // If we're on the dashboard view, reload it to show updated goals
+    const dashboardView = document.getElementById('view-dashboard');
+    if (dashboardView && dashboardView.classList.contains('active')) {
+      console.log('[Profile] Reloading dashboard with updated data');
+      await loadDashboard();
+    }
+  }
+}
 
 // ============================================================================
 // REQUEST STATE MANAGEMENT
@@ -205,23 +263,58 @@ async function fetchAPI(endpoint, options = {}) {
 
 async function loadDashboard() {
   try {
-    // Load sample user data
-    const [goalSummary, budgetAnalysis, reminder] = await Promise.all([
-      fetchAPI('/goals/summary/sample'),
+    // Fetch user profile first
+    if (!currentUserProfile) {
+      await fetchUserProfile();
+    }
+
+    // If profile still not loaded, show error
+    if (!currentUserProfile) {
+      console.error('[Dashboard] Failed to load user profile');
+      return;
+    }
+
+    // Load supplementary data (budget analysis and investment reminders)
+    const [budgetAnalysis, reminder] = await Promise.all([
       fetchAPI('/budget/analysis/sample'),
       fetchAPI('/investments/reminders/sample'),
     ]);
-    
-    // Update assets (from goal summary context)
+
+    // Update assets display with current profile data
     updateAssetsDisplay();
-    
+
+    // Get goals from user profile
+    const profileGoalSummaries = currentUserProfile.goals.map(g => {
+      const progress = g.targetAmount > 0 ? (g.currentAmount / g.targetAmount) * 100 : 0;
+      const deadline = new Date(g.deadline);
+      const now = new Date();
+      const monthsRemaining = Math.max(0, Math.ceil((deadline - now) / (1000 * 60 * 60 * 24 * 30)));
+      const remaining = g.targetAmount - g.currentAmount;
+      const monthlyNeeded = monthsRemaining > 0 ? remaining / monthsRemaining : remaining;
+
+      let status = 'on_track';
+      if (progress >= 100) status = 'completed';
+      else if (monthsRemaining === 0) status = 'at_risk';
+      else if (monthlyNeeded > 1000) status = 'behind';
+
+      return {
+        goalId: g.id,
+        goalName: g.name,
+        targetAmount: g.targetAmount,
+        currentAmount: g.currentAmount,
+        progress,
+        monthsRemaining,
+        status,
+      };
+    });
+
     // Combine API goals with locally stored goals for dashboard
     const localGoalSummaries = userGoals.map(g => {
       const progress = g.targetAmount > 0 ? (g.currentAmount / g.targetAmount) * 100 : 0;
       const deadline = new Date(g.deadline);
       const now = new Date();
       const monthsRemaining = Math.max(0, Math.ceil((deadline - now) / (1000 * 60 * 60 * 24 * 30)));
-      
+
       return {
         goalId: g.id,
         goalName: g.name,
@@ -232,8 +325,19 @@ async function loadDashboard() {
         isLocal: true,
       };
     });
-    
-    const allGoals = [...(goalSummary || []), ...localGoalSummaries];
+
+    // Combine all goals and deduplicate by ID (profile goals have highest priority)
+    const goalsMap = new Map();
+    // Profile goals are the source of truth
+    profileGoalSummaries.forEach(g => goalsMap.set(g.goalId, g));
+    // Add any local goals that aren't already in profile
+    localGoalSummaries.forEach(g => {
+      if (!goalsMap.has(g.goalId)) {
+        goalsMap.set(g.goalId, g);
+      }
+    });
+
+    const allGoals = Array.from(goalsMap.values());
     updateGoalsList(allGoals);
     
     // Update budget ring
@@ -248,12 +352,44 @@ async function loadDashboard() {
 }
 
 function updateAssetsDisplay() {
-  // Using sample data values
-  document.getElementById('total-assets').textContent = '$16,000';
-  document.getElementById('checking-balance').textContent = '$3,000';
-  document.getElementById('savings-balance').textContent = '$8,000';
-  document.getElementById('investments-balance').textContent = '$5,000';
-  document.getElementById('monthly-surplus').textContent = '$2,250';
+  if (!currentUserProfile) {
+    // Fallback to sample data if profile not loaded yet
+    document.getElementById('total-assets').textContent = '$16,000';
+    document.getElementById('checking-balance').textContent = '$3,000';
+    document.getElementById('savings-balance').textContent = '$8,000';
+    document.getElementById('investments-balance').textContent = '$5,000';
+    document.getElementById('monthly-surplus').textContent = '$2,250';
+    return;
+  }
+
+  // Calculate total assets from user profile
+  const checking = currentUserProfile.accounts.checking || 0;
+  const savings = currentUserProfile.accounts.savings || 0;
+
+  // Calculate total investments
+  let investmentsTotal = 0;
+  if (currentUserProfile.accounts.investments) {
+    const inv = currentUserProfile.accounts.investments;
+    investmentsTotal = (inv.taxable?.balance || 0) +
+                      (inv.rothIRA?.balance || 0) +
+                      (inv.traditional401k?.balance || 0);
+  }
+
+  const totalAssets = checking + savings + investmentsTotal;
+
+  // Calculate monthly surplus (income - fixed expenses - spending budgets)
+  const fixedExpensesTotal = currentUserProfile.fixedExpenses
+    .reduce((sum, exp) => sum + exp.amount, 0);
+  const spendingBudgetTotal = currentUserProfile.spendingCategories
+    .reduce((sum, cat) => sum + cat.monthlyBudget, 0);
+  const monthlySurplus = currentUserProfile.monthlyIncome - fixedExpensesTotal - spendingBudgetTotal;
+
+  // Update display with formatted values
+  document.getElementById('total-assets').textContent = `$${totalAssets.toLocaleString()}`;
+  document.getElementById('checking-balance').textContent = `$${checking.toLocaleString()}`;
+  document.getElementById('savings-balance').textContent = `$${savings.toLocaleString()}`;
+  document.getElementById('investments-balance').textContent = `$${investmentsTotal.toLocaleString()}`;
+  document.getElementById('monthly-surplus').textContent = `$${monthlySurplus.toLocaleString()}`;
 }
 
 function updateGoalsList(goals) {
@@ -352,9 +488,40 @@ function refreshDashboard() {
 
 async function loadGoals() {
   try {
-    const apiGoals = await fetchAPI('/goals/summary/sample');
+    // Fetch user profile if not already loaded
+    if (!currentUserProfile) {
+      await fetchUserProfile();
+    }
+
     const container = document.getElementById('goals-detail-list');
-    
+
+    // Get goals from user profile
+    const profileGoalSummaries = currentUserProfile ? currentUserProfile.goals.map(g => {
+      const progress = g.targetAmount > 0 ? (g.currentAmount / g.targetAmount) * 100 : 0;
+      const deadline = new Date(g.deadline);
+      const now = new Date();
+      const monthsRemaining = Math.max(0, Math.ceil((deadline - now) / (1000 * 60 * 60 * 24 * 30)));
+      const remaining = g.targetAmount - g.currentAmount;
+      const monthlyNeeded = monthsRemaining > 0 ? remaining / monthsRemaining : remaining;
+
+      let status = 'on_track';
+      if (progress >= 100) status = 'completed';
+      else if (monthsRemaining === 0) status = 'at_risk';
+      else if (monthlyNeeded > 1000) status = 'behind';
+
+      return {
+        goalId: g.id,
+        goalName: g.name,
+        targetAmount: g.targetAmount,
+        currentAmount: g.currentAmount,
+        progress,
+        monthsRemaining,
+        monthlyNeeded,
+        status,
+        isLocal: false, // From profile
+      };
+    }) : [];
+
     // Combine API goals with locally stored goals
     const localGoalSummaries = userGoals.map(g => {
       const progress = g.targetAmount > 0 ? (g.currentAmount / g.targetAmount) * 100 : 0;
@@ -382,8 +549,21 @@ async function loadGoals() {
       };
     });
     
-    const allGoals = [...(apiGoals || []), ...localGoalSummaries];
-    
+    // Combine all goals and deduplicate by ID
+    const goalsMap = new Map();
+
+    // Add profile goals (highest priority, source of truth)
+    profileGoalSummaries.forEach(g => goalsMap.set(g.goalId, g));
+
+    // Add local goals only if not already in profile
+    localGoalSummaries.forEach(g => {
+      if (!goalsMap.has(g.goalId)) {
+        goalsMap.set(g.goalId, g);
+      }
+    });
+
+    const allGoals = Array.from(goalsMap.values());
+
     if (allGoals.length === 0) {
       container.innerHTML = '<p class="empty-state">No goals yet. Click "Add Goal" to create your first financial goal!</p>';
       return;
@@ -754,9 +934,10 @@ function updateModeToggleUI() {
 async function streamChat(message, reasoningId) {
   const body = {
     message,
+    userId: CURRENT_USER_ID,  // Always send userId to maintain consistent profile
     mode: analysisMode  // Use selected mode instead of hardcoded 'fast'
   };
-  
+
   if (currentConversationId) {
     body.conversationId = currentConversationId;
   }
@@ -829,11 +1010,21 @@ async function streamChat(message, reasoningId) {
                 removeReasoningIndicator(reasoningId);
                 reasoningId = null;
               }
-              
+
               if (data.conversationId) {
                 currentConversationId = data.conversationId;
               }
-              
+
+              // Update user profile if it changed (e.g., after transfers, goal creation)
+              console.log('[Chat] Complete event received, has profile update:', !!data.updatedUserProfile);
+              if (data.updatedUserProfile) {
+                console.log('[Chat] Updating profile with balances:', {
+                  checking: data.updatedUserProfile.accounts.checking,
+                  savings: data.updatedUserProfile.accounts.savings
+                });
+                updateUserProfile(data.updatedUserProfile);
+              }
+
               // Display the reply
               if (data.reply) {
                 if (!messageEl) {
@@ -885,13 +1076,14 @@ async function streamChat(message, reasoningId) {
 
 async function sendChatFallback(message) {
   const reasoningId = showReasoningIndicator();
-  
+
   try {
     const body = {
       message,
+      userId: CURRENT_USER_ID,  // Always send userId
       mode: analysisMode  // Use selected mode
     };
-    
+
     if (currentConversationId) {
       body.conversationId = currentConversationId;
     }
@@ -902,11 +1094,16 @@ async function sendChatFallback(message) {
     });
     
     removeReasoningIndicator(reasoningId);
-    
+
     if (response.conversationId) {
       currentConversationId = response.conversationId;
     }
-    
+
+    // Update user profile if it changed
+    if (response.updatedUserProfile) {
+      updateUserProfile(response.updatedUserProfile);
+    }
+
     // Backend returns { reply: "...", conversationId: "...", ... }
     addMessage('assistant', response.reply || 'No response received');
     
@@ -1153,10 +1350,13 @@ async function createGoal(event) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newGoal),
     });
-    
+
     if (response.ok) {
       const savedGoal = await response.json();
       showToast(`Goal "${name}" created successfully!`, 'success');
+      // Refresh user profile to get updated goals
+      await fetchUserProfile();
+      updateAssetsDisplay();
     } else {
       // If backend doesn't support it yet, save locally
       saveGoalLocally(newGoal);
@@ -1165,7 +1365,7 @@ async function createGoal(event) {
     // Backend not available or endpoint doesn't exist, save locally
     saveGoalLocally(newGoal);
   }
-  
+
   hideAddGoalModal();
   loadGoals();
 }
@@ -1453,3 +1653,92 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 });
+
+// ============================================================================
+// ADVISOR WIDGET FUNCTIONS
+// ============================================================================
+
+/**
+ * Toggle advisor modal open/close
+ */
+function toggleAdvisor() {
+  const modal = document.getElementById('advisor-modal');
+  if (modal.classList.contains('active')) {
+    closeAdvisor();
+  } else {
+    modal.classList.add('active');
+  }
+}
+
+/**
+ * Open advisor with optional pre-filled message
+ */
+function openAdvisor(message) {
+  const modal = document.getElementById('advisor-modal');
+  modal.classList.add('active');
+  
+  if (message) {
+    const input = document.getElementById('message-input');
+    if (input) {
+      input.value = message;
+      input.focus();
+    }
+  }
+}
+
+/**
+ * Close advisor modal
+ */
+function closeAdvisor() {
+  const modal = document.getElementById('advisor-modal');
+  modal.classList.remove('active');
+}
+
+/**
+ * Show transfer modal (redirects to advisor)
+ */
+function showTransferModal() {
+  const modal = document.getElementById('transfer-modal');
+  modal.style.display = 'block';
+}
+
+/**
+ * Hide transfer modal
+ */
+function hideTransferModal() {
+  const modal = document.getElementById('transfer-modal');
+  modal.style.display = 'none';
+}
+
+/**
+ * Quick transfer action
+ */
+function quickTransfer(accountType) {
+  openAdvisor(`transfer money from ${accountType}`);
+}
+
+/**
+ * View account details
+ */
+function viewDetails(accountType) {
+  openAdvisor(`show me details for my ${accountType} account`);
+}
+
+/**
+ * Simplified view switcher (for backward compatibility)
+ */
+function switchView(viewName) {
+  if (viewName === 'chat') {
+    openAdvisor();
+  } else {
+    // Scroll to section
+    const section = document.getElementById(viewName);
+    if (section) {
+      section.scrollIntoView({ behavior: 'smooth' });
+    }
+  }
+}
+
+// Update version
+console.log('💰 Finance Bot v4.0 loaded - Modern Banking Dashboard! 🏦');
+
