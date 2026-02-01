@@ -60,6 +60,15 @@ The foundation of this platform is built on comprehensive TypeScript types that 
 #### 6. **Agent System**
 - `AgentOutput` - Analysis output from individual agents
 
+### Priority Goal ("Prioritize my most realistic goal right now")
+
+- **User profile**: `priority_goal_id` (ID of the goal currently set as priority).
+- **Goals**: `isPriority` (boolean) on each goal; the selected goal has `isPriority: true`.
+- **API**: `POST /priority-goal` with `{ userId }` returns structured JSON (priority_goal, goal_rankings, capital_reallocations, updated_user_state, explanation) and persists the priority in user state.
+- **Chat**: Say "Prioritize my most realistic goal right now" (or similar) to run feasibility ranking, set the priority goal, and get an explanation. Future chat and recommendations use this priority.
+- **Feasibility**: Deterministic scoring uses progress vs target, time horizon, required monthly contribution, spending behavior, liquidity, and risk alignment. Goals are ranked; the highest-feasibility goal is selected (with conservative tie-break).
+- **Guardrails**: Reallocations are validated against min balance and emergency liquidity before being suggested.
+
 ## 🎯 Sample Data: Sarah
 
 The `sample-data.ts` file includes a realistic example user:

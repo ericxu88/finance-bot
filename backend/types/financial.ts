@@ -34,6 +34,18 @@ export interface UserProfile {
   /** Financial goals the user is working toward */
   goals: FinancialGoal[];
   
+  /** ID of the goal currently set as priority (from "prioritize my most realistic goal") */
+  priority_goal_id?: string;
+  
+  /** Financial Stability Mode: active 30-day liquidity-first mode (from "Stabilize my finances for the next month") */
+  stabilization_mode?: boolean;
+  /** When stabilization was activated (ISO date string) */
+  stabilization_start?: string;
+  /** When stabilization is planned to end (ISO date string) */
+  stabilization_end?: string;
+  /** When user canceled stabilization early (ISO date string) */
+  stabilization_canceled_at?: string;
+  
   /** User's financial preferences and risk profile */
   preferences: UserPreferences;
   
@@ -251,6 +263,9 @@ export interface FinancialGoal {
   
   /** Account IDs that contribute to this goal */
   linkedAccountIds: string[];
+  
+  /** True when this goal is the current priority (set by "prioritize my most realistic goal") */
+  isPriority?: boolean;
 }
 
 // ============================================================================

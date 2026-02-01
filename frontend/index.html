@@ -27,6 +27,16 @@
         </nav>
 
         <div class="header-actions">
+          <div id="stabilization-badge" class="stabilization-badge" style="display: none;">
+            <span class="badge-text">Financial Stability Mode: Active</span>
+            <button type="button" id="stabilization-cancel-btn" class="badge-cancel" title="Cancel stability mode">×</button>
+          </div>
+          <div id="stabilization-before-after" class="stabilization-before-after" style="display: none;">
+            <span class="before-after-label">Liquid:</span>
+            <span class="before-after-value" id="stabilization-before">—</span>
+            <span class="before-after-arrow">→</span>
+            <span class="before-after-value" id="stabilization-after">—</span>
+          </div>
           <button class="btn-icon" title="Notifications">
             <span>🔔</span>
           </button>
@@ -329,6 +339,9 @@
             </button>
             <button class="suggestion" onclick="sendSuggestion('How are my goals doing?')">
               🎯 Check goal progress
+            </button>
+            <button class="suggestion" onclick="sendSuggestion('Stabilize my finances for the next month')">
+              🛡️ Stabilize my finances
             </button>
           </div>
 

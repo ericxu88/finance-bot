@@ -28,13 +28,16 @@ export const ParsedIntentSchema = z.object({
     'get_recommendation',   // User asks "what should I do?"
     'check_goal_progress',  // User asks about goal status
     'explain_tradeoffs',    // User wants to understand tradeoffs
-    'general_question',     // General financial question
+    'general_question',    // General financial question
     'clarification_needed', // Can't understand, need more info
-    // NEW: Action intents for modifying data
+    // Action intents for modifying data
     'transfer_money',       // User wants to move money between accounts
     'create_goal',          // User wants to create a new financial goal
     'update_budget',        // User wants to modify a budget category
-    'execute_action',       // User confirms to execute a previously suggested action
+    'execute_action',      // User confirms to execute a previously suggested action
+    'prioritize_goal',      // User says "prioritize my most realistic goal right now"
+    'stabilize_finances',   // User says "stabilize my finances for the next month"
+    'increase_savings_no_lifestyle', // User says "increase savings without lowering lifestyle"
   ]),
   
   // For simulate_action intent
@@ -183,6 +186,9 @@ INTENT TYPES:
 - create_goal: User wants to CREATE a new financial goal (e.g., "I want to save for a car")
 - update_budget: User wants to CHANGE their budget allocations (e.g., "Increase my dining budget to $300")
 - execute_action: User confirms they want to execute a previously suggested or simulated action (e.g., "Yes, do it", "Go ahead")
+- prioritize_goal: User wants to SET which goal is their current priority (feasibility ranking). Use this for: "Prioritize my most realistic goal right now", "Which goal should I focus on?", "Pick my most achievable goal". Do NOT use get_recommendation for these—use prioritize_goal.
+- stabilize_finances: User wants to STABILIZE finances for the next month (30-day liquidity-first mode). Use for: "Stabilize my finances for the next month", "I need to stabilize my cash flow", "Put me in stability mode for a month".
+- increase_savings_no_lifestyle: User wants to INCREASE SAVINGS without lowering lifestyle. Use for: "Increase my financial savings without lowering my lifestyle", "Save more without cutting back on what I enjoy", "Boost savings while keeping my lifestyle".
 
 {format_instructions}
 
@@ -376,6 +382,13 @@ export class MockIntentParser {
       intentType = 'get_recommendation';
     } else if (lowerMessage.includes('progress') || lowerMessage.includes('how am i doing') || lowerMessage.includes('status')) {
       intentType = 'check_goal_progress';
+    } else if (lowerMessage.includes('stabilize') || lowerMessage.includes('stability mode') || (lowerMessage.includes('stabil') && lowerMessage.includes('month'))) {
+      intentType = 'stabilize_finances';
+    } else if ((lowerMessage.includes('increase') && lowerMessage.includes('savings') && (lowerMessage.includes('lifestyle') || lowerMessage.includes('without lowering'))) ||
+               (lowerMessage.includes('save more') && lowerMessage.includes('lifestyle'))) {
+      intentType = 'increase_savings_no_lifestyle';
+    } else if (lowerMessage.includes('prioritize') && (lowerMessage.includes('goal') || lowerMessage.includes('realistic'))) {
+      intentType = 'prioritize_goal';
     } else if (lowerMessage.includes('tradeoff') || lowerMessage.includes('pros and cons') || lowerMessage.includes('explain')) {
       intentType = 'explain_tradeoffs';
     } else if (lowerMessage.includes('invest') || lowerMessage.includes('save') || lowerMessage.includes('spend') || 

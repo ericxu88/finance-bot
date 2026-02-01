@@ -21,6 +21,7 @@ const API_BASE = 'http://localhost:3000';
 let currentConversationId = null;
 let currentUserProfile = null; // Store current user profile for real-time updates
 const CURRENT_USER_ID = 'default'; // Consistent user ID across all requests
+let lastStabilizationResult = null; // Before/after when Financial Stability Mode was activated
 
 // Analysis mode: 'fast' = single AI call, 'detailed' = multi-agent analysis
 let analysisMode = 'fast';
@@ -63,13 +64,67 @@ async function updateUserProfile(updatedProfile) {
 
     // Always update the assets display (sidebar shows on all views)
     updateAssetsDisplay();
+    updateStabilizationUI();
 
-    // If we're on the dashboard view, reload it to show updated goals
-    const dashboardView = document.getElementById('view-dashboard');
-    if (dashboardView && dashboardView.classList.contains('active')) {
-      console.log('[Profile] Reloading dashboard with updated data');
+    // Reload the active view so new/updated data appears without a full page reload
+    const goalsView = document.getElementById('view-goals');
+    if (goalsView && goalsView.classList.contains('active')) {
+      await loadGoals();
+    }
+    const accountsView = document.getElementById('view-accounts');
+    if (accountsView && accountsView.classList.contains('active')) {
       await loadDashboard();
     }
+  }
+}
+
+/**
+ * Show/hide Financial Stability Mode badge and before/after; wire cancel button.
+ */
+function updateStabilizationUI() {
+  const badgeEl = document.getElementById('stabilization-badge');
+  const beforeAfterEl = document.getElementById('stabilization-before-after');
+  const beforeEl = document.getElementById('stabilization-before');
+  const afterEl = document.getElementById('stabilization-after');
+  const cancelBtn = document.getElementById('stabilization-cancel-btn');
+  if (!badgeEl || !beforeAfterEl) return;
+
+  const active = currentUserProfile?.stabilization_mode === true;
+  badgeEl.style.display = active ? 'flex' : 'none';
+  if (lastStabilizationResult?.before && lastStabilizationResult?.after) {
+    beforeAfterEl.style.display = active ? 'flex' : 'none';
+    if (beforeEl) beforeEl.textContent = `$${lastStabilizationResult.before.totalLiquid?.toLocaleString() ?? '—'}`;
+    if (afterEl) afterEl.textContent = `$${lastStabilizationResult.after.totalLiquid?.toLocaleString() ?? '—'}`;
+  } else {
+    beforeAfterEl.style.display = 'none';
+  }
+
+  if (cancelBtn) {
+    cancelBtn.onclick = active ? cancelStabilizationMode : null;
+  }
+}
+
+/**
+ * Cancel Financial Stability Mode via API and refresh profile.
+ */
+async function cancelStabilizationMode() {
+  try {
+    const res = await fetch(`${API_BASE}/stabilize/cancel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: CURRENT_USER_ID }),
+    });
+    if (!res.ok) throw new Error('Cancel failed');
+    const data = await res.json();
+    if (data.updatedUserProfile) {
+      updateUserProfile(data.updatedUserProfile);
+    } else {
+      await fetchUserProfile();
+      updateStabilizationUI();
+    }
+    lastStabilizationResult = null;
+  } catch (err) {
+    console.error('[Stabilization] Cancel failed:', err);
   }
 }
 
@@ -1097,7 +1152,7 @@ async function streamChat(message, reasoningId) {
                 currentConversationId = data.conversationId;
               }
 
-              // Update user profile if it changed (e.g., after transfers, goal creation)
+              // Update user profile if it changed (e.g., after transfers, goal creation, stabilization)
               console.log('[Chat] Complete event received, has profile update:', !!data.updatedUserProfile);
               if (data.updatedUserProfile) {
                 console.log('[Chat] Updating profile with balances:', {
@@ -1105,6 +1160,15 @@ async function streamChat(message, reasoningId) {
                   savings: data.updatedUserProfile.accounts.savings
                 });
                 updateUserProfile(data.updatedUserProfile);
+              }
+              // Store stabilization before/after when Financial Stability Mode was activated
+              if (data.rawAnalysis && data.rawAnalysis.before && data.rawAnalysis.after) {
+                lastStabilizationResult = {
+                  before: data.rawAnalysis.before,
+                  after: data.rawAnalysis.after,
+                  explanation: data.rawAnalysis.explanation
+                };
+                updateStabilizationUI();
               }
 
               // Display the reply
@@ -1976,6 +2040,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Load user profile
   fetchUserProfile().then(() => {
+    updateStabilizationUI();
     // Load the initial accounts view
     refreshAccounts();
   });

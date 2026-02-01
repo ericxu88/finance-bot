@@ -5,6 +5,8 @@
  * Coordinates intent parsing, simulation, analysis, and response formatting.
  */
 
+import { ChatOpenAI } from '@langchain/openai';
+import { HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
 import { IntentParser, MockIntentParser, type ParsedIntent, type ConversationMessage } from './intent-parser.js';
 import {
   conversationStore,
@@ -31,6 +33,9 @@ import { MockAgentOrchestrator } from '../agents/mock-orchestrator.js';
 import { UnifiedAgent } from '../agents/unified-agent.js';
 import { analyzeFinancialHealth, generateGoalSummary } from '../recommendation-engine.js';
 import { actionExecutor, type ActionResult } from './action-executor.js';
+import { prioritizeMostRealisticGoal } from '../priority-goal/index.js';
+import { runStabilization } from '../stabilization/index.js';
+import { runIncreaseSavingsWithoutLifestyle } from '../savings-without-lifestyle/index.js';
 import type { UserProfile, FinancialAction, SimulationResult } from '../../types/financial.js';
 
 export interface ChatRequest {
@@ -135,6 +140,47 @@ export class ChatHandler {
         // Step 1: Parse intent with conversation context (uses LLM if available)
         console.log(`[ChatHandler] Parsing intent for: "${message.substring(0, 50)}..." (with ${conversationHistory.length} messages of context)`);
         intent = await this.intentParser.parse(message, userProfile, conversationHistory);
+
+        // Override: "Prioritize my most realistic goal" must always route to prioritize_goal
+        // (LLM often classifies it as get_recommendation)
+        const lower = message.toLowerCase().trim();
+        const isPrioritizeGoalPhrase =
+          (lower.includes('prioritize') && (lower.includes('realistic') || lower.includes('most realistic goal'))) ||
+          lower.includes('prioritize my most realistic goal') ||
+          (lower.includes('which goal') && (lower.includes('focus') || lower.includes('priorit')));
+        if (isPrioritizeGoalPhrase && userProfile.goals?.length) {
+          intent = {
+            ...intent,
+            intent_type: 'prioritize_goal',
+            user_intent_summary: 'User wants to set their most realistic/achievable goal as priority.',
+          };
+        }
+
+        // Override: "Stabilize my finances for the next month" must always route to stabilize_finances
+        // (LLM often classifies it as get_recommendation)
+        const isStabilizePhrase =
+          lower.includes('stabilize') && (lower.includes('finances') || lower.includes('finance')) ||
+          lower.includes('stability mode') ||
+          (lower.includes('stabil') && (lower.includes('month') || lower.includes('cash flow')));
+        if (isStabilizePhrase) {
+          intent = {
+            ...intent,
+            intent_type: 'stabilize_finances',
+            user_intent_summary: 'User wants to activate 30-day Financial Stability Mode (liquidity-first).',
+          };
+        }
+
+        const isIncreaseSavingsNoLifestylePhrase =
+          (lower.includes('increase') && lower.includes('savings') && (lower.includes('lifestyle') || lower.includes('without lowering'))) ||
+          (lower.includes('save more') && lower.includes('lifestyle')) ||
+          (lower.includes('savings') && lower.includes('without') && lower.includes('lowering'));
+        if (isIncreaseSavingsNoLifestylePhrase) {
+          intent = {
+            ...intent,
+            intent_type: 'increase_savings_no_lifestyle',
+            user_intent_summary: 'User wants to increase savings without reducing lifestyle spending.',
+          };
+        }
         
         // Step 2: Resolve with conversation context (for follow-up questions)
         intent = resolveIntentWithContext(intent, context, userProfile);
@@ -196,6 +242,32 @@ export class ChatHandler {
           reply = executeResult.reply;
           if (executeResult.updatedUserProfile) {
             currentUserProfile = executeResult.updatedUserProfile;
+            profileWasUpdated = true;
+          }
+          break;
+
+        case 'prioritize_goal':
+          const priorityResult = this.handlePrioritizeGoal(currentUserProfile);
+          reply = priorityResult.reply;
+          currentUserProfile = priorityResult.updatedUserProfile;
+          profileWasUpdated = true;
+          rawAnalysis = priorityResult.rawResult;
+          break;
+
+        case 'stabilize_finances':
+          const stabilizeResult = this.handleStabilizeFinances(currentUserProfile);
+          reply = stabilizeResult.reply;
+          currentUserProfile = stabilizeResult.updatedUserProfile;
+          profileWasUpdated = true;
+          rawAnalysis = stabilizeResult.rawResult;
+          break;
+
+        case 'increase_savings_no_lifestyle':
+          const savingsResult = this.handleIncreaseSavingsNoLifestyle(currentUserProfile);
+          reply = savingsResult.reply;
+          rawAnalysis = savingsResult.rawResult;
+          if (savingsResult.updatedUserProfile) {
+            currentUserProfile = savingsResult.updatedUserProfile;
             profileWasUpdated = true;
           }
           break;
@@ -560,29 +632,133 @@ export class ChatHandler {
     };
   }
 
+  private handlePrioritizeGoal(userProfile: UserProfile): {
+    reply: FormattedResponse;
+    updatedUserProfile: UserProfile;
+    rawResult: unknown;
+  } {
+    const result = prioritizeMostRealisticGoal(userProfile, { persist: () => {} });
+    const lines: string[] = [result.explanation];
+    if (result.capital_reallocations.length > 0) {
+      lines.push(
+        '\n**Suggested reallocations:** ' +
+          result.capital_reallocations
+            .map((r) => `$${r.amount} from ${r.from} → ${r.to}`)
+            .join('; ')
+      );
+    }
+    return {
+      reply: {
+        message: lines.join('\n\n'),
+        summary: `Priority goal set to "${result.priority_goal.name}"`,
+        suggestedFollowUps: [
+          'Should I invest $500 for my priority goal?',
+          'Show me my goals',
+          'What should I do with my extra money?',
+        ],
+        shouldProceed: true,
+        confidence: 'high',
+      },
+      updatedUserProfile: result.updatedUserProfile,
+      rawResult: result,
+    };
+  }
+
+  private handleStabilizeFinances(userProfile: UserProfile): {
+    reply: FormattedResponse;
+    updatedUserProfile: UserProfile;
+    rawResult: unknown;
+  } {
+    const result = runStabilization(userProfile, { persist: () => {} });
+    const before = result.before;
+    const after = result.after;
+    const lines: string[] = [
+      result.explanation,
+      '',
+      `**Before:** Checking $${before.checking.toFixed(0)} · Savings $${before.savings.toFixed(0)} · Total liquid $${before.totalLiquid.toFixed(0)}`,
+      `**After:** Checking $${after.checking.toFixed(0)} · Savings $${after.savings.toFixed(0)} · Total liquid $${after.totalLiquid.toFixed(0)}`,
+    ];
+    return {
+      reply: {
+        message: lines.join('\n\n'),
+        summary: 'Financial Stability Mode is now active for 30 days.',
+        suggestedFollowUps: [
+          'Cancel stability mode',
+          'Show my balances',
+          'What changed?',
+        ],
+        shouldProceed: true,
+        confidence: 'high',
+      },
+      updatedUserProfile: result.updatedUserProfile,
+      rawResult: result,
+    };
+  }
+
+  private handleIncreaseSavingsNoLifestyle(userProfile: UserProfile): {
+    reply: FormattedResponse;
+    rawResult: unknown;
+    updatedUserProfile?: UserProfile;
+  } {
+    const result = runIncreaseSavingsWithoutLifestyle(userProfile);
+    const lines: string[] = [
+      result.explanation,
+      '',
+      `**Protected (lifestyle):** ${result.protected_categories.length ? result.protected_categories.join(', ') : 'None detected'}`,
+      '',
+      '**Actions:**',
+      ...result.actions.map(
+        (a) => `- ${a.type}: $${a.amount.toFixed(0)} from ${a.from} → ${a.to}. ${a.reason}`
+      ),
+      '',
+      `**Account balances:** Unchanged (only budget thresholds were lowered). Checking $${result.updated_balances_projection.checking.toFixed(0)} · Savings $${result.updated_balances_projection.savings.toFixed(0)} · Investments $${result.updated_balances_projection.investments.toFixed(0)}`,
+    ];
+    return {
+      reply: {
+        message: lines.join('\n\n'),
+        summary: 'Savings increase plan without lowering lifestyle.',
+        suggestedFollowUps: [
+          'Apply these reallocations',
+          'Show my current budgets',
+          'What counts as lifestyle spending?',
+        ],
+        shouldProceed: true,
+        confidence: 'high',
+      },
+      rawResult: result,
+      updatedUserProfile: result.updatedUserProfile,
+    };
+  }
+
   private async handleGeneralQuestion(
     message: string,
     userProfile: UserProfile,
-    _context: ConversationContext
+    context: ConversationContext
   ): Promise<FormattedResponse> {
-    // For general questions, provide helpful context and suggestions
+    // When we have an LLM, answer the user's actual question in a conversational way
+    if (!this.useMockAgents) {
+      try {
+        const llmReply = await this.answerGeneralQuestionWithLLM(message, userProfile, context);
+        if (llmReply) {
+          return llmReply;
+        }
+      } catch (err) {
+        console.error('[ChatHandler] LLM general answer failed, falling back to template:', err);
+      }
+    }
+
+    // Fallback: template response (mock mode or LLM error)
     const healthAnalysis = analyzeFinancialHealth(userProfile);
     const goalSummaries = generateGoalSummary(userProfile);
-
-    // Check if user is asking about spending/budget
     const isAskingAboutSpending = /spend|budget|money|expense|cost|afford|save|cut|reduce/i.test(message);
 
     let response = "I'm here to help you make smart financial decisions. Here's your financial overview:\n\n";
-
     response += `**Financial Health:** ${healthAnalysis.overallHealth}\n`;
     response += `**Monthly Surplus:** $${healthAnalysis.monthlySurplus.toLocaleString()}\n`;
     response += `**Goals on Track:** ${goalSummaries.filter(g => g.status === 'on_track' || g.status === 'completed').length}/${goalSummaries.length}\n\n`;
 
-    // Add spending insights if user is asking about spending
-    if (isAskingAboutSpending) {
+    if (isAskingAboutSpending && userProfile.spendingCategories?.length) {
       response += `**📊 Spending Analysis:**\n`;
-
-      // Find categories with high spending
       const categoriesWithSpending = userProfile.spendingCategories
         .filter(cat => cat.currentSpent > 0)
         .map(cat => ({
@@ -591,30 +767,10 @@ export class ChatHandler {
           overspent: cat.currentSpent > cat.monthlyBudget,
         }))
         .sort((a, b) => b.percentUsed - a.percentUsed);
-
-      // Show top spending categories
       categoriesWithSpending.slice(0, 3).forEach(cat => {
         const emoji = cat.overspent ? '🔴' : cat.percentUsed > 70 ? '🟡' : '🟢';
         response += `${emoji} **${cat.name}:** $${cat.currentSpent.toFixed(0)}/$${cat.monthlyBudget} (${cat.percentUsed.toFixed(0)}% used)\n`;
-
-        // Show recent transactions
-        const recentTxns = (cat.transactions || [])
-          .filter(t => t.type === 'expense')
-          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-          .slice(0, 2);
-
-        if (recentTxns.length > 0) {
-          response += `   Recent: ${recentTxns.map(t => `${t.description} ($${Math.abs(t.amount).toFixed(0)})`).join(', ')}\n`;
-        }
       });
-
-      // Find overspending opportunities
-      const overspentCategories = categoriesWithSpending.filter(cat => cat.overspent || cat.percentUsed > 80);
-      if (overspentCategories.length > 0) {
-        response += `\n💡 **Opportunity:** You're spending heavily on ${overspentCategories.map(c => c.name).join(', ')}. `;
-        response += `Consider reducing spending in these areas to boost your savings.\n`;
-      }
-
       response += '\n';
     }
 
@@ -624,24 +780,79 @@ export class ChatHandler {
     response += "• **Compare options:** 'Save $500 vs invest $500'\n";
     response += "• **Get recommendations:** 'What should I do with my extra money?'\n";
     response += "• **Check progress:** 'How are my goals doing?'\n";
-    response += "• **Move money:** 'Transfer $500 from checking to savings'\n";
-    response += "• **Create goals:** 'I want to save for a vacation'\n";
-    response += "• **Update budget:** 'Increase my dining budget to $300'\n";
 
     return {
       message: response,
       summary: 'Financial overview and insights',
       suggestedFollowUps: isAskingAboutSpending
-        ? [
-            'How can I reduce my spending?',
-            'What should I do with my surplus?',
-            'Show me where I can save money',
-          ]
-        : [
-            'What should I do with my extra money?',
-            'Where am I spending too much?',
-            'How are my goals progressing?',
-          ],
+        ? ['How can I reduce my spending?', 'What should I do with my surplus?', 'Show me where I can save money']
+        : ['What should I do with my extra money?', 'Where am I spending too much?', 'How are my goals progressing?'],
+      shouldProceed: true,
+      confidence: 'high',
+    };
+  }
+
+  /**
+   * Answer a general financial question using the LLM, with user context and conversation history.
+   * This makes different questions get different, relevant answers instead of a fixed template.
+   */
+  private async answerGeneralQuestionWithLLM(
+    message: string,
+    userProfile: UserProfile,
+    context: ConversationContext
+  ): Promise<FormattedResponse | null> {
+    const apiKey = process.env.OPEN_AI_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim();
+    if (!apiKey) return null;
+
+    const healthAnalysis = analyzeFinancialHealth(userProfile);
+    const goalSummaries = generateGoalSummary(userProfile);
+    const goalsText = goalSummaries
+      .map(g => `- ${g.goalName}: $${g.currentAmount.toLocaleString()} / $${g.targetAmount.toLocaleString()} (${g.status})`)
+      .join('\n');
+
+    const systemPrompt = `You are a helpful financial assistant for a banking app. Answer the user's question in a clear, friendly way. Use their financial context when relevant.
+
+**User's financial context:**
+- Monthly income: $${userProfile.monthlyIncome.toLocaleString()}
+- Financial health: ${healthAnalysis.overallHealth}
+- Monthly surplus: $${healthAnalysis.monthlySurplus.toLocaleString()}
+- Goals: ${goalsText || 'None set'}
+
+Keep answers concise (2–4 short paragraphs). If they ask something you can't do (e.g. real-time market data), say so and suggest what you can help with (e.g. goals, saving, investing, budget). Do not repeat a generic menu unless they ask "what can you do?".`;
+
+    const model = new ChatOpenAI({
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      temperature: 0.5,
+      apiKey,
+      maxTokens: 1024,
+    });
+
+    const chatMessages: (SystemMessage | HumanMessage | AIMessage)[] = [
+      new SystemMessage(systemPrompt),
+    ];
+    const recent = context.messages.slice(-6);
+    for (const m of recent) {
+      if (m.role === 'user') {
+        chatMessages.push(new HumanMessage(m.content));
+      } else {
+        chatMessages.push(new AIMessage(m.content));
+      }
+    }
+    chatMessages.push(new HumanMessage(message));
+
+    const result = await model.invoke(chatMessages);
+    const text = typeof result.content === 'string' ? result.content : (result.content as { text?: string }[])?.[0]?.text ?? '';
+
+    if (!text?.trim()) return null;
+
+    return {
+      message: text.trim(),
+      summary: 'Answer to your question',
+      suggestedFollowUps: [
+        'What should I do with my extra money?',
+        'Should I invest $500?',
+        'How are my goals doing?',
+      ],
       shouldProceed: true,
       confidence: 'high',
     };

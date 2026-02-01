@@ -20,6 +20,9 @@ import { analyzeFinancialHealth, generateGoalSummary } from '../lib/recommendati
 import { demoScenarios, getScenarioById } from '../lib/demo-scenarios.js';
 import { ChatHandler } from '../lib/chat/chat-handler.js';
 import { generateInvestmentReminder, analyzeBudget, getBudgetSummaryMessage, detectUnderspending, analyzeUpcomingExpenses } from '../lib/investment-reminders.js';
+import { prioritizeMostRealisticGoal } from '../lib/priority-goal/index.js';
+import { runStabilization, cancelStabilization } from '../lib/stabilization/index.js';
+import { runIncreaseSavingsWithoutLifestyle } from '../lib/savings-without-lifestyle/index.js';
 import type { UserProfile, FinancialAction } from '../types/financial.js';
 
 const app = express();
@@ -96,6 +99,7 @@ const goalSchema = z.object({
   priority: z.number().int().min(1).max(5),
   timeHorizon: z.enum(['short', 'medium', 'long']),
   linkedAccountIds: z.array(z.string().min(1)),
+  isPriority: z.boolean().optional(),
 });
 
 // Schema for asset allocation (used in InvestmentAccount)
@@ -155,6 +159,11 @@ const userProfileSchema = z.object({
   fixedExpenses: z.array(fixedExpenseSchema),
   spendingCategories: z.array(spendingCategorySchema),
   goals: z.array(goalSchema),
+  priority_goal_id: z.string().min(1).optional(),
+  stabilization_mode: z.boolean().optional(),
+  stabilization_start: z.string().optional(),
+  stabilization_end: z.string().optional(),
+  stabilization_canceled_at: z.string().optional(),
   preferences: preferencesSchema,
   createdAt: dateSchema,
   updatedAt: dateSchema,
@@ -656,6 +665,170 @@ app.delete('/goals/:id', (req: Request, res: Response) => {
   });
 });
 
+// =============================================================================
+// PRIORITY GOAL — "Prioritize my most realistic goal right now"
+// =============================================================================
+
+const priorityGoalRequestSchema = z.object({
+  userId: z.string().min(1).default('default'),
+  userProfile: userProfileSchema.optional(),
+});
+
+/**
+ * POST /priority-goal
+ * Run feasibility ranking, select priority goal, persist state, return structured output.
+ */
+app.post('/priority-goal', (req: Request, res: Response) => {
+  const parsed = priorityGoalRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: 'Invalid request payload',
+      details: parsed.error.flatten(),
+    });
+  }
+
+  const { userId, userProfile: bodyProfile } = parsed.data;
+  const profile = bodyProfile ?? getUserProfile(userId);
+
+  try {
+    const result = prioritizeMostRealisticGoal(profile, {
+      userId,
+      persist: (updated) => updateUserProfile(userId, updated),
+    });
+
+    return res.status(200).json({
+      priority_goal: result.priority_goal,
+      goal_rankings: result.goal_rankings,
+      capital_reallocations: result.capital_reallocations,
+      updated_user_state: result.updated_user_state,
+      explanation: result.explanation,
+      updatedUserProfile: result.updatedUserProfile,
+    });
+  } catch (error) {
+    console.error('[Priority Goal] Error:', error);
+    return res.status(500).json({
+      error: 'Priority goal processing failed',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+const stabilizeRequestSchema = z.object({
+  userId: z.string().min(1).default('default'),
+  userProfile: userProfileSchema.optional(),
+});
+
+/**
+ * POST /stabilize
+ * Activate 30-day Financial Stability Mode: increase liquidity buffer, reduce non-critical investments/discretionary.
+ */
+app.post('/stabilize', (req: Request, res: Response) => {
+  const parsed = stabilizeRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: 'Invalid request payload',
+      details: parsed.error.flatten(),
+    });
+  }
+  const { userId, userProfile: bodyProfile } = parsed.data;
+  const profile = bodyProfile ?? getUserProfile(userId);
+  try {
+    const result = runStabilization(profile, {
+      userId,
+      persist: (updated) => updateUserProfile(userId, updated),
+    });
+    return res.status(200).json({
+      before: result.before,
+      after: result.after,
+      minimumSafeBuffer: result.minimumSafeBuffer,
+      shortfall: result.shortfall,
+      actions: result.actions,
+      explanation: result.explanation,
+      stabilization_start: result.stabilization_start,
+      stabilization_end: result.stabilization_end,
+      updatedUserProfile: result.updatedUserProfile,
+    });
+  } catch (error) {
+    console.error('[Stabilize] Error:', error);
+    return res.status(500).json({
+      error: 'Stabilization failed',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+const stabilizeCancelSchema = z.object({
+  userId: z.string().min(1).default('default'),
+  userProfile: userProfileSchema.optional(),
+});
+
+/**
+ * POST /stabilize/cancel
+ * Cancel Financial Stability Mode (user override).
+ */
+app.post('/stabilize/cancel', (req: Request, res: Response) => {
+  const parsed = stabilizeCancelSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: 'Invalid request payload',
+      details: parsed.error.flatten(),
+    });
+  }
+  const { userId, userProfile: bodyProfile } = parsed.data;
+  const profile = bodyProfile ?? getUserProfile(userId);
+  try {
+    const updated = cancelStabilization(profile, {
+      persist: (p) => updateUserProfile(userId, p),
+    });
+    updateUserProfile(userId, updated);
+    return res.status(200).json({
+      message: 'Financial Stability Mode canceled.',
+      updatedUserProfile: updated,
+    });
+  } catch (error) {
+    console.error('[Stabilize Cancel] Error:', error);
+    return res.status(500).json({
+      error: 'Cancel stabilization failed',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+const increaseSavingsRequestSchema = z.object({
+  userId: z.string().min(1).default('default'),
+  userProfile: userProfileSchema.optional(),
+});
+
+/**
+ * POST /savings/increase-without-lifestyle
+ * Increase savings by reallocating from non-lifestyle discretionary categories; protect lifestyle spending.
+ * Returns structured JSON: protected_categories, actions, updated_balances_projection, explanation.
+ */
+app.post('/savings/increase-without-lifestyle', (req: Request, res: Response) => {
+  const parsed = increaseSavingsRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: 'Invalid request payload',
+      details: parsed.error.flatten(),
+    });
+  }
+  const { userId, userProfile: bodyProfile } = parsed.data;
+  const profile = bodyProfile ?? getUserProfile(userId);
+  try {
+    const result = runIncreaseSavingsWithoutLifestyle(profile);
+    if (result.updatedUserProfile) {
+      updateUserProfile(userId, result.updatedUserProfile);
+    }
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error('[Increase savings without lifestyle] Error:', error);
+    return res.status(500).json({
+      error: 'Increase savings failed',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
 app.post('/analyze', async (req: Request, res: Response) => {
   const parsed = simulateRequestSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -1060,6 +1233,7 @@ app.post('/chat/stream', async (req: Request, res: Response): Promise<void> => {
       confidence: response.reply.confidence,
       executionTimeMs: response.executionTimeMs,
       updatedUserProfile: response.updatedUserProfile,
+      rawAnalysis: response.rawAnalysis ?? undefined,
     });
 
     res.end();

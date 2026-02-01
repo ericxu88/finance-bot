@@ -257,7 +257,7 @@ export class FinancialOptimizerAgent {
   /**
    * Analyze opportunities for investment based on time horizon and risk tolerance
    */
-  private analyzeInvestmentOpportunities(userProfile: UserProfile, warnings: string[]): OptimizationAction[] {
+  private analyzeInvestmentOpportunities(userProfile: UserProfile, _warnings: string[]): OptimizationAction[] {
     const actions: OptimizationAction[] = [];
 
     // Only suggest investments if emergency fund is adequately funded
@@ -276,8 +276,9 @@ export class FinancialOptimizerAgent {
       return yearsToGoal >= 5 && !g.name.toLowerCase().includes('emergency');
     });
 
-    if (longTermGoals.length > 0 && userProfile.preferences.riskTolerance !== 'low') {
+    if (longTermGoals.length > 0 && userProfile.preferences.riskTolerance !== 'conservative') {
       const goal = longTermGoals[0];
+      if (!goal) return actions;
       const monthlySurplus = this.calculateMonthlySurplus(userProfile);
 
       if (monthlySurplus > 400) {
@@ -293,7 +294,7 @@ export class FinancialOptimizerAgent {
           },
           reasoning: `${goal.name} has 5+ year time horizon. Investing provides higher returns (~7% vs ~4% savings). Risk tolerance is ${userProfile.preferences.riskTolerance}.`,
           expectedImpact: `Projected value at goal deadline: $${this.projectInvestmentGrowth(investmentAmount, 5).toFixed(0)} (vs $${(investmentAmount * 12 * 5).toFixed(0)} in savings). Difference: +$${(this.projectInvestmentGrowth(investmentAmount, 5) - investmentAmount * 12 * 5).toFixed(0)}.`,
-          confidence: userProfile.preferences.riskTolerance === 'high' ? 'high' : 'medium',
+          confidence: userProfile.preferences.riskTolerance === 'aggressive' ? 'high' : 'medium',
         });
       }
     }
