@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
@@ -18,10 +19,23 @@ import { MockAgentOrchestrator } from '../lib/agents/mock-orchestrator.js';
 import { analyzeFinancialHealth, generateGoalSummary } from '../lib/recommendation-engine.js';
 import { demoScenarios, getScenarioById } from '../lib/demo-scenarios.js';
 import { ChatHandler } from '../lib/chat/chat-handler.js';
+import { generateInvestmentReminder, analyzeBudget, getBudgetSummaryMessage, detectUnderspending, analyzeUpcomingExpenses } from '../lib/investment-reminders.js';
 import type { UserProfile, FinancialAction } from '../types/financial.js';
 
 const app = express();
 const port = process.env.PORT ? Number(process.env.PORT) : 3000;
+
+// CORS middleware for frontend
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+    return;
+  }
+  next();
+});
 
 app.use(express.json({ limit: '1mb' }));
 
@@ -84,20 +98,53 @@ const goalSchema = z.object({
   linkedAccountIds: z.array(z.string().min(1)),
 });
 
+// Schema for asset allocation (used in InvestmentAccount)
+const assetAllocationSchema = z.object({
+  stocks: z.number().min(0).max(100),
+  bonds: z.number().min(0).max(100),
+  cash: z.number().min(0).max(100),
+  other: z.number().min(0).max(100).optional(),
+}).refine(
+  (data) => {
+    const sum = data.stocks + data.bonds + data.cash + (data.other || 0);
+    return Math.abs(sum - 100) < 0.1; // Allow small rounding differences
+  },
+  { message: "Allocation percentages must sum to 100" }
+);
+
+// Schema for investment account (supports both number and InvestmentAccount format)
+const investmentAccountSchema = z.union([
+  z.number().nonnegative(),
+  z.object({
+    balance: z.number().nonnegative(),
+    allocation: assetAllocationSchema,
+  }),
+]);
+
 const accountsSchema = z.object({
   checking: z.number().nonnegative(),
   savings: z.number().nonnegative(),
   investments: z.object({
-    taxable: z.number().nonnegative(),
-    rothIRA: z.number().nonnegative(),
-    traditional401k: z.number().nonnegative(),
+    taxable: investmentAccountSchema,
+    rothIRA: investmentAccountSchema,
+    traditional401k: investmentAccountSchema,
   }),
 });
+
+const investmentPreferencesSchema = z.object({
+  autoInvestEnabled: z.boolean(),
+  reminderFrequency: z.enum(['weekly', 'biweekly', 'monthly', 'quarterly', 'none']),
+  reminderDay: z.number().min(1).max(28).optional(),
+  targetMonthlyInvestment: z.number().nonnegative().optional(),
+  preferredAccount: z.enum(['taxable', 'rothIRA', 'traditional401k']).optional(),
+  lastInvestmentDate: dateSchema.optional(),
+}).optional();
 
 const preferencesSchema = z.object({
   riskTolerance: z.enum(['conservative', 'moderate', 'aggressive']),
   liquidityPreference: z.enum(['high', 'medium', 'low']),
   guardrails: z.array(guardrailSchema),
+  investmentPreferences: investmentPreferencesSchema,
 });
 
 const userProfileSchema = z.object({
@@ -419,6 +466,120 @@ app.post('/goals/summary', (req: Request, res: Response) => {
       message: error instanceof Error ? error.message : String(error),
     });
   }
+});
+
+// ============================================================================
+// GOAL MANAGEMENT
+// ============================================================================
+
+// In-memory storage for user-created goals (in production, use a database)
+const userCreatedGoals: Map<string, Array<{
+  id: string;
+  name: string;
+  targetAmount: number;
+  currentAmount: number;
+  deadline: string;
+  priority: number;
+  createdAt: string;
+}>> = new Map();
+
+const createGoalSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(1),
+  targetAmount: z.number().positive(),
+  currentAmount: z.number().min(0).default(0),
+  deadline: z.string(),
+  priority: z.number().min(1).max(10).default(5),
+  userId: z.string().optional(),
+});
+
+/**
+ * POST /goals
+ * Create a new financial goal
+ */
+app.post('/goals', (req: Request, res: Response) => {
+  const parsed = createGoalSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: 'Invalid request payload',
+      details: parsed.error.flatten(),
+    });
+  }
+
+  const { name, targetAmount, currentAmount, deadline, priority, userId } = parsed.data;
+  const goalUserId = userId || 'default';
+  
+  const newGoal = {
+    id: parsed.data.id || `goal_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+    name,
+    targetAmount,
+    currentAmount,
+    deadline,
+    priority,
+    createdAt: new Date().toISOString(),
+  };
+
+  // Get or create user's goals list
+  const userGoals = userCreatedGoals.get(goalUserId) || [];
+  userGoals.push(newGoal);
+  userCreatedGoals.set(goalUserId, userGoals);
+
+  console.log(`[Goals] Created goal "${name}" for user ${goalUserId}`);
+
+  return res.status(201).json({
+    goal: newGoal,
+    message: `Goal "${name}" created successfully`,
+    metadata: {
+      timestamp: new Date().toISOString(),
+      totalUserGoals: userGoals.length,
+    },
+  });
+});
+
+/**
+ * GET /goals
+ * Get all goals for a user
+ */
+app.get('/goals', (req: Request, res: Response) => {
+  const userId = (req.query.userId as string) || 'default';
+  const userGoals = userCreatedGoals.get(userId) || [];
+
+  return res.status(200).json({
+    goals: userGoals,
+    count: userGoals.length,
+    metadata: {
+      timestamp: new Date().toISOString(),
+    },
+  });
+});
+
+/**
+ * DELETE /goals/:id
+ * Delete a specific goal
+ */
+app.delete('/goals/:id', (req: Request, res: Response) => {
+  const goalId = req.params.id;
+  const userId = (req.query.userId as string) || 'default';
+  
+  const userGoals = userCreatedGoals.get(userId) || [];
+  const goalIndex = userGoals.findIndex(g => g.id === goalId);
+  
+  if (goalIndex === -1) {
+    return res.status(404).json({
+      error: 'Goal not found',
+      goalId,
+    });
+  }
+  
+  const [deletedGoal] = userGoals.splice(goalIndex, 1);
+  userCreatedGoals.set(userId, userGoals);
+
+  console.log(`[Goals] Deleted goal "${deletedGoal?.name}" for user ${userId}`);
+
+  return res.status(200).json({
+    message: 'Goal deleted successfully',
+    deletedGoal,
+  });
 });
 
 app.post('/analyze', async (req: Request, res: Response) => {
@@ -819,7 +980,220 @@ app.post('/chat/stream', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
+// ============================================================================
+// BUDGET ANALYSIS ENDPOINT
+// ============================================================================
+
+/**
+ * GET /budget/analysis
+ * 
+ * Analyze budget with subcategory breakdown
+ */
+app.post('/budget/analysis', (req: Request, res: Response) => {
+  const parsed = userProfileSchema.safeParse(req.body.user ?? req.body);
+  
+  // Allow using sample user if no user provided
+  const user = parsed.success ? parsed.data : sampleUser;
+  
+  try {
+    const analysis = analyzeBudget(user);
+    const summaryMessage = getBudgetSummaryMessage(analysis);
+    
+    return res.status(200).json({
+      analysis,
+      message: summaryMessage,
+      metadata: {
+        timestamp: new Date().toISOString(),
+        userId: user.id,
+      },
+    });
+  } catch (error) {
+    console.error('Error in /budget/analysis endpoint:', error);
+    return res.status(500).json({
+      error: 'Budget analysis failed',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * GET /budget/analysis/sample
+ * 
+ * Get budget analysis for sample user (demo endpoint)
+ */
+app.get('/budget/analysis/sample', (_req: Request, res: Response) => {
+  try {
+    const analysis = analyzeBudget(sampleUser);
+    const summaryMessage = getBudgetSummaryMessage(analysis);
+    
+    return res.status(200).json({
+      analysis,
+      message: summaryMessage,
+      metadata: {
+        timestamp: new Date().toISOString(),
+        userId: sampleUser.id,
+      },
+    });
+  } catch (error) {
+    console.error('Error in /budget/analysis/sample endpoint:', error);
+    return res.status(500).json({
+      error: 'Budget analysis failed',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * GET /budget/underspending/sample
+ * 
+ * Detect underspending in budget categories for sample user
+ */
+app.get('/budget/underspending/sample', (_req: Request, res: Response) => {
+  try {
+    const analysis = detectUnderspending(sampleUser);
+    
+    return res.status(200).json({
+      analysis,
+      metadata: {
+        timestamp: new Date().toISOString(),
+        userId: sampleUser.id,
+      },
+    });
+  } catch (error) {
+    console.error('Error in /budget/underspending/sample endpoint:', error);
+    return res.status(500).json({
+      error: 'Underspending analysis failed',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * GET /budget/upcoming/sample
+ * 
+ * Get upcoming expenses analysis for sample user
+ */
+app.get('/budget/upcoming/sample', (_req: Request, res: Response) => {
+  try {
+    const analysis = analyzeUpcomingExpenses(sampleUser);
+    
+    return res.status(200).json({
+      analysis,
+      metadata: {
+        timestamp: new Date().toISOString(),
+        userId: sampleUser.id,
+      },
+    });
+  } catch (error) {
+    console.error('Error in /budget/upcoming/sample endpoint:', error);
+    return res.status(500).json({
+      error: 'Upcoming expenses analysis failed',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// ============================================================================
+// INVESTMENT REMINDERS ENDPOINT
+// ============================================================================
+
+/**
+ * POST /investments/reminders
+ * 
+ * Get non-intrusive investment reminder based on user preferences
+ */
+app.post('/investments/reminders', (req: Request, res: Response) => {
+  const parsed = userProfileSchema.safeParse(req.body.user ?? req.body);
+  
+  // Allow using sample user if no user provided
+  const user = parsed.success ? parsed.data : sampleUser;
+  
+  try {
+    const reminder = generateInvestmentReminder(user);
+    
+    if (!reminder) {
+      return res.status(200).json({
+        hasReminder: false,
+        message: "No investment reminder at this time.",
+        reason: user.preferences.investmentPreferences?.autoInvestEnabled
+          ? "Auto-invest is enabled - no manual reminders needed."
+          : user.preferences.investmentPreferences?.reminderFrequency === 'none'
+            ? "Reminders are disabled in your preferences."
+            : "Not time for a reminder yet based on your preferences.",
+      });
+    }
+    
+    return res.status(200).json({
+      hasReminder: reminder.shouldRemind,
+      reminder: {
+        urgency: reminder.urgency,
+        message: reminder.message,
+        reasoning: reminder.reasoning,
+        recommendedAmount: reminder.recommendedAmount,
+        suggestedAccount: reminder.suggestedAccount,
+        impactIfInvested: reminder.impactIfInvested,
+        opportunityCostNote: reminder.opportunityCostNote,
+        nextReminderDate: reminder.nextReminderDate?.toISOString(),
+      },
+      metadata: {
+        timestamp: new Date().toISOString(),
+        userId: user.id,
+      },
+    });
+  } catch (error) {
+    console.error('Error in /investments/reminders endpoint:', error);
+    return res.status(500).json({
+      error: 'Investment reminder generation failed',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * GET /investments/reminders/sample
+ * 
+ * Get investment reminder for sample user (demo endpoint)
+ */
+app.get('/investments/reminders/sample', (_req: Request, res: Response) => {
+  try {
+    const reminder = generateInvestmentReminder(sampleUser);
+    
+    if (!reminder) {
+      return res.status(200).json({
+        hasReminder: false,
+        message: "No investment reminder at this time.",
+      });
+    }
+    
+    return res.status(200).json({
+      hasReminder: reminder.shouldRemind,
+      reminder: {
+        urgency: reminder.urgency,
+        message: reminder.message,
+        reasoning: reminder.reasoning,
+        recommendedAmount: reminder.recommendedAmount,
+        suggestedAccount: reminder.suggestedAccount,
+        impactIfInvested: reminder.impactIfInvested,
+        opportunityCostNote: reminder.opportunityCostNote,
+        nextReminderDate: reminder.nextReminderDate?.toISOString(),
+      },
+      metadata: {
+        timestamp: new Date().toISOString(),
+        userId: sampleUser.id,
+      },
+    });
+  } catch (error) {
+    console.error('Error in /investments/reminders/sample endpoint:', error);
+    return res.status(500).json({
+      error: 'Investment reminder generation failed',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
 app.listen(port, () => {
   console.log(`API listening on http://localhost:${port}`);
   console.log(`Chat endpoint available at POST /chat`);
+  console.log(`Budget analysis available at GET /budget/analysis/sample`);
+  console.log(`Investment reminders available at GET /investments/reminders/sample`);
 });

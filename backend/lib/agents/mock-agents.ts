@@ -168,6 +168,57 @@ export function generateMockGuardrailAnalysis(context: AgentContext): z.infer<ty
 }
 
 /**
+ * Generate a user-friendly summary without exposing internal agent architecture
+ */
+function generateUserFriendlySummary(
+  context: AgentContext,
+  overallRecommendation: string,
+  budgetingAnalysis: z.infer<typeof BudgetingAnalysisSchema>,
+  investmentAnalysis: z.infer<typeof InvestmentAnalysisSchema>,
+  guardrailAnalysis: z.infer<typeof GuardrailAnalysisSchema>
+): string {
+  const { action, simulationResult } = context;
+  const actionType = action.type;
+  const amount = action.amount;
+  const checkingAfter = simulationResult.scenarioIfDo.accountsAfter.checking;
+  
+  // Build summary based on recommendation without mentioning agents
+  if (guardrailAnalysis.violated) {
+    return `This ${actionType} of $${amount.toLocaleString()} would reduce your checking balance below your minimum threshold of $${guardrailAnalysis.violations[0]?.threshold_value || 1000}. Consider a smaller amount or wait until you have more funds available.`;
+  }
+  
+  if (overallRecommendation === 'do_not_proceed') {
+    return `Based on your current financial situation, ${actionType}ing $${amount.toLocaleString()} is not recommended at this time. Your checking balance would drop to $${checkingAfter.toLocaleString()}, which may not provide enough buffer for unexpected expenses.`;
+  }
+  
+  if (overallRecommendation === 'proceed_with_caution' || overallRecommendation === 'reconsider') {
+    const concerns: string[] = [];
+    const budgetConcern = budgetingAnalysis.concerns[0];
+    const investConcern = investmentAnalysis.concerns[0];
+    if (budgetConcern) {
+      concerns.push(budgetConcern);
+    }
+    if (investConcern) {
+      concerns.push(investConcern);
+    }
+    const concernText = concerns.length > 0 ? ` Key considerations: ${concerns.join('. ')}.` : '';
+    return `${actionType.charAt(0).toUpperCase() + actionType.slice(1)}ing $${amount.toLocaleString()} is feasible but requires careful consideration.${concernText} Your checking balance would be $${checkingAfter.toLocaleString()} after this action.`;
+  }
+  
+  // Proceed or proceed_confidently
+  const positives: string[] = [];
+  const keyFinding = budgetingAnalysis.key_findings[0];
+  if (keyFinding) {
+    positives.push(keyFinding);
+  }
+  if (actionType === 'invest' && investmentAnalysis.investment_metrics?.projected_value_5yr) {
+    positives.push(`Projected to grow to $${investmentAnalysis.investment_metrics.projected_value_5yr.toLocaleString()} in 5 years`);
+  }
+  
+  return `${actionType.charAt(0).toUpperCase() + actionType.slice(1)}ing $${amount.toLocaleString()} looks like a solid decision based on your financial situation. ${positives.join('. ')}. Your checking balance will remain at $${checkingAfter.toLocaleString()}.`;
+}
+
+/**
  * Generate realistic mock validation analysis
  */
 export function generateMockValidationAnalysis(
@@ -239,9 +290,7 @@ export function generateMockValidationAnalysis(
       agents_opposing: agentsOpposing,
       consensus_level: consensusLevel
     },
-    final_summary: `Based on analysis from budgeting, investment, and guardrail agents: ${overallRecommendation === 'do_not_proceed' 
-      ? 'This action violates guardrails and should not proceed.'
-      : `This action is ${overallRecommendation.replace('_', ' ')}. Budgeting agent ${budgetingAnalysis.recommendation}, investment agent ${investmentAnalysis.recommendation}. ${guardrailAnalysis.violated ? 'Guardrails violated.' : 'All guardrails satisfied.'}`}`,
+    final_summary: generateUserFriendlySummary(context, overallRecommendation, budgetingAnalysis, investmentAnalysis, guardrailAnalysis),
     decision_tree: {
       if_proceed: `If you proceed: ${context.simulationResult.scenarioIfDo.goalImpacts.map((g: { goalName: string; progressChangePct: number }) => `${g.goalName} progress increases by ${g.progressChangePct.toFixed(1)}%`).join(', ')}. Checking balance becomes $${context.simulationResult.scenarioIfDo.accountsAfter.checking.toFixed(0)}.`,
       if_do_not_proceed: `If you don't proceed: No immediate impact. Opportunity cost: ${investmentAnalysis.investment_metrics?.projected_value_5yr ? `$${(investmentAnalysis.investment_metrics.projected_value_5yr - context.action.amount).toFixed(0)} potential growth over 5 years` : 'Maintains current liquidity'}.`,

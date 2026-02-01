@@ -188,6 +188,12 @@ YOUR VALIDATION TASK
 
 Your overall_recommendation is for display only; the orchestrator computes the actual decision from domain agents + guardrail. When guardrail can_proceed = true and both domain agents recommend approve or approve_with_caution, use overall_recommendation "proceed_with_caution" or "proceed". Do NOT say "do_not_proceed" when no agent said oppose. Describe risks and that the user can proceed with caution when appropriate.
 
+IMPORTANT OUTPUT RULES:
+- In your final_summary and decision_tree text, do NOT mention "agents", "budgeting agent", "investment agent", or any internal system architecture.
+- Write as if YOU are a single financial advisor speaking directly to the user.
+- Focus on data, numbers, and actionable insights — not internal process details.
+- Say things like "Based on your financial data..." or "The analysis shows..." instead of "The budgeting agent recommends..."
+
 Provide a comprehensive, synthesized analysis that helps the user make an informed decision.
     `.trim();
   }

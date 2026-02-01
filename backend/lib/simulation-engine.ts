@@ -17,6 +17,7 @@ import type {
   ValidationResult,
   BudgetStatus,
 } from '../types/financial.js';
+import { getInvestmentBalance } from '../types/financial.js';
 
 // ============================================================================
 // CONSTANTS
@@ -43,9 +44,24 @@ export function cloneAccounts(accounts: Accounts): Accounts {
     checking: accounts.checking,
     savings: accounts.savings,
     investments: {
-      taxable: accounts.investments.taxable,
-      rothIRA: accounts.investments.rothIRA,
-      traditional401k: accounts.investments.traditional401k,
+      taxable: typeof accounts.investments.taxable === 'number'
+        ? accounts.investments.taxable
+        : {
+            balance: accounts.investments.taxable.balance,
+            allocation: { ...accounts.investments.taxable.allocation },
+          },
+      rothIRA: typeof accounts.investments.rothIRA === 'number'
+        ? accounts.investments.rothIRA
+        : {
+            balance: accounts.investments.rothIRA.balance,
+            allocation: { ...accounts.investments.rothIRA.allocation },
+          },
+      traditional401k: typeof accounts.investments.traditional401k === 'number'
+        ? accounts.investments.traditional401k
+        : {
+            balance: accounts.investments.traditional401k.balance,
+            allocation: { ...accounts.investments.traditional401k.allocation },
+          },
     },
   };
 }
@@ -294,13 +310,13 @@ export function checkConstraintViolations(
       case 'max_investment_pct': {
         const totalAssets = accountsAfter.checking + 
                           accountsAfter.savings + 
-                          accountsAfter.investments.taxable +
-                          accountsAfter.investments.rothIRA +
-                          accountsAfter.investments.traditional401k;
+                          getInvestmentBalance(accountsAfter.investments.taxable) +
+                          getInvestmentBalance(accountsAfter.investments.rothIRA) +
+                          getInvestmentBalance(accountsAfter.investments.traditional401k);
         
-        const investedAssets = accountsAfter.investments.taxable +
-                              accountsAfter.investments.rothIRA +
-                              accountsAfter.investments.traditional401k;
+        const investedAssets = getInvestmentBalance(accountsAfter.investments.taxable) +
+                              getInvestmentBalance(accountsAfter.investments.rothIRA) +
+                              getInvestmentBalance(accountsAfter.investments.traditional401k);
         
         const investmentPct = investedAssets / totalAssets;
         
@@ -456,7 +472,19 @@ export function simulate_invest(
   // Clone accounts for scenario calculations
   const accountsAfterInvest = cloneAccounts(state.accounts);
   accountsAfterInvest.checking -= amount;
-  accountsAfterInvest.investments[accountType] += amount;
+  
+  // Update investment account balance (handles both number and InvestmentAccount formats)
+  const currentAccount = accountsAfterInvest.investments[accountType];
+  if (typeof currentAccount === 'number') {
+    // Convert to InvestmentAccount format with default allocation
+    accountsAfterInvest.investments[accountType] = {
+      balance: currentAccount + amount,
+      allocation: { stocks: 100, bonds: 0, cash: 0 }, // Default: 100% stocks for new investments
+    };
+  } else {
+    // Update existing InvestmentAccount balance
+    currentAccount.balance += amount;
+  }
   
   // Find the goal if specified
   const goal = goalId ? state.goals.find(g => g.id === goalId) : undefined;

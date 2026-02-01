@@ -17,6 +17,11 @@ export interface ConversationMessage {
   analysisResult?: unknown;
 }
 
+export interface PendingAction {
+  type: string;
+  data: Record<string, unknown>;
+}
+
 export interface ConversationContext {
   id: string;
   userId: string;
@@ -24,6 +29,7 @@ export interface ConversationContext {
   lastAction?: FinancialAction;
   lastGoalDiscussed?: string;
   lastAmountDiscussed?: number;
+  pendingAction?: PendingAction;
   createdAt: Date;
   updatedAt: Date;
 }

@@ -16,6 +16,7 @@ import {
   sampleSimulationResult,
   sampleComparisonOptions,
 } from './types/sample-data.js';
+import { getInvestmentBalance } from './types/financial.js';
 
 // ============================================================================
 // VALIDATION FUNCTIONS
@@ -27,9 +28,9 @@ import {
 function calculateTotalAssets(user: UserProfile): number {
   const { checking, savings, investments } = user.accounts;
   const investmentTotal = 
-    investments.taxable + 
-    investments.rothIRA + 
-    investments.traditional401k;
+    getInvestmentBalance(investments.taxable) + 
+    getInvestmentBalance(investments.rothIRA) + 
+    getInvestmentBalance(investments.traditional401k);
   
   return checking + savings + investmentTotal;
 }

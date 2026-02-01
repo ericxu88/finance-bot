@@ -8,6 +8,14 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "npm run build && node dist/lib/__tests__/simulation-engine.test.js",
+    "test:allocation": "npm run build && node dist/lib/__tests__/asset-allocation.test.js",
+    "test:allocation:integration": "npm run build && node dist/lib/__tests__/allocation-integration.test.js",
+    "test:features": "npm run build && node dist/lib/__tests__/new-features.test.js",
+    "test:features:edge": "npm run build && node dist/lib/__tests__/features-edge-cases.test.js",
+    "test:simulation:edge": "npm run build && node dist/lib/__tests__/simulation-edge-cases.test.js",
+    "test:recommend:edge": "npm run build && node dist/lib/__tests__/recommendation-edge-cases.test.js",
+    "test:allocation:edge": "npm run build && node dist/lib/__tests__/asset-allocation-edge-cases.test.js",
+    "test:edge:all": "npm run build && node dist/lib/__tests__/features-edge-cases.test.js && node dist/lib/__tests__/simulation-edge-cases.test.js && node dist/lib/__tests__/recommendation-edge-cases.test.js && node dist/lib/__tests__/asset-allocation-edge-cases.test.js",
     "test:api": "npm run build && node dist/src/__tests__/api.test.js",
     "demo:agents": "npm run build && node dist/scripts/demo-langchain-agents.js",
     "demo:agents:mock": "npm run build && node dist/scripts/demo-agents-mock.js",
@@ -22,7 +30,8 @@
     "test:chat-real": "npm run build && node dist/scripts/test-chat-real.js",
     "demo:chat": "npm run build && node dist/scripts/demo-chat.js",
     "validate": "npm run build && node dist/validate-types.js",
-    "start:api": "node dist/src/server.js"
+    "start:api": "node dist/src/server.js",
+    "start:frontend": "cd frontend && python3 -m http.server 8080"
   },
   "keywords": [
     "finance",

@@ -37,6 +37,9 @@ export interface UserProfile {
   /** User's financial preferences and risk profile */
   preferences: UserPreferences;
   
+  /** One-time or scheduled upcoming expenses */
+  upcomingExpenses?: UpcomingExpense[];
+  
   /** Profile creation timestamp */
   createdAt: Date;
   
@@ -59,17 +62,46 @@ export interface Accounts {
 }
 
 /**
+ * Asset allocation breakdown (percentages that sum to 100)
+ */
+export interface AssetAllocation {
+  /** Stocks/equities percentage (0-100) */
+  stocks: number;
+  
+  /** Bonds/fixed income percentage (0-100) */
+  bonds: number;
+  
+  /** Cash/money market percentage (0-100) */
+  cash: number;
+  
+  /** Other assets percentage (0-100) - REITs, commodities, etc. */
+  other?: number;
+}
+
+/**
+ * Investment account with balance and asset allocation
+ */
+export interface InvestmentAccount {
+  /** Account balance */
+  balance: number;
+  
+  /** Asset allocation breakdown (percentages sum to 100) */
+  allocation: AssetAllocation;
+}
+
+/**
  * Investment account balances by account type
+ * Supports both simple number format (backward compatible) and detailed account format
  */
 export interface InvestmentAccounts {
   /** Taxable brokerage account */
-  taxable: number;
+  taxable: number | InvestmentAccount;
   
   /** Roth IRA balance (post-tax contributions) */
-  rothIRA: number;
+  rothIRA: number | InvestmentAccount;
   
   /** Traditional 401(k) balance (pre-tax contributions) */
-  traditional401k: number;
+  traditional401k: number | InvestmentAccount;
 }
 
 // ============================================================================
@@ -97,6 +129,52 @@ export interface FixedExpense {
 }
 
 /**
+ * One-time or scheduled upcoming expense
+ */
+export interface UpcomingExpense {
+  /** Unique identifier */
+  id: string;
+  
+  /** Expense name (e.g., "Annual Insurance Premium", "Car Registration") */
+  name: string;
+  
+  /** Expense amount */
+  amount: number;
+  
+  /** Date the expense is due */
+  dueDate: string;
+  
+  /** Whether this expense recurs */
+  isRecurring: boolean;
+  
+  /** Optional spending category this falls under */
+  categoryId?: string;
+  
+  /** Optional notes or description */
+  notes?: string;
+  
+  /** Status of the expense */
+  status: 'pending' | 'paid' | 'overdue';
+}
+
+/**
+ * Subcategory within a spending category
+ */
+export interface SpendingSubcategory {
+  /** Unique subcategory identifier */
+  id: string;
+  
+  /** Subcategory name (e.g., "Produce", "Meat", "Dairy" under Groceries) */
+  name: string;
+  
+  /** Monthly budget allocation for this subcategory */
+  monthlyBudget: number;
+  
+  /** Amount spent in current period */
+  currentSpent: number;
+}
+
+/**
  * Discretionary spending category with budget tracking
  */
 export interface SpendingCategory {
@@ -114,6 +192,9 @@ export interface SpendingCategory {
   
   /** Transaction history for this category */
   transactions: Transaction[];
+  
+  /** Optional subcategories for detailed tracking */
+  subcategories?: SpendingSubcategory[];
 }
 
 /**
@@ -177,6 +258,29 @@ export interface FinancialGoal {
 // ============================================================================
 
 /**
+ * Investment reminder preferences
+ */
+export interface InvestmentPreferences {
+  /** Whether auto-invest is enabled */
+  autoInvestEnabled: boolean;
+  
+  /** How often to receive investment reminders (if not auto-investing) */
+  reminderFrequency: 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'none';
+  
+  /** Preferred day for reminders (1-7 for weekly, 1-28 for monthly) */
+  reminderDay?: number;
+  
+  /** Target monthly investment amount (optional) */
+  targetMonthlyInvestment?: number;
+  
+  /** Preferred account for investments */
+  preferredAccount?: 'taxable' | 'rothIRA' | 'traditional401k';
+  
+  /** Last investment date (for tracking reminder timing) */
+  lastInvestmentDate?: Date;
+}
+
+/**
  * User's financial preferences and risk profile
  */
 export interface UserPreferences {
@@ -188,6 +292,9 @@ export interface UserPreferences {
   
   /** User-defined financial safety rules */
   guardrails: Guardrail[];
+  
+  /** Investment preferences and reminder settings (optional for backward compatibility) */
+  investmentPreferences?: InvestmentPreferences;
 }
 
 /**
@@ -439,3 +546,75 @@ export type ConfidenceLevel = 'high' | 'medium' | 'low';
  * Budget status indicators
  */
 export type BudgetStatus = 'under' | 'good' | 'warning' | 'over';
+
+// ============================================================================
+// PORTFOLIO UTILITY FUNCTIONS
+// ============================================================================
+
+/**
+ * Get the balance from an investment account (handles both number and InvestmentAccount formats)
+ */
+export function getInvestmentBalance(account: number | InvestmentAccount): number {
+  return typeof account === 'number' ? account : account.balance;
+}
+
+/**
+ * Get the allocation from an investment account (returns default if not available)
+ */
+export function getInvestmentAllocation(account: number | InvestmentAccount): AssetAllocation {
+  if (typeof account === 'number') {
+    // Default allocation for accounts without allocation data: 100% stocks (aggressive default)
+    return { stocks: 100, bonds: 0, cash: 0 };
+  }
+  return account.allocation;
+}
+
+/**
+ * Calculate total portfolio allocation across all investment accounts
+ */
+export function calculatePortfolioAllocation(investments: InvestmentAccounts): AssetAllocation {
+  const taxableBalance = getInvestmentBalance(investments.taxable);
+  const rothBalance = getInvestmentBalance(investments.rothIRA);
+  const trad401kBalance = getInvestmentBalance(investments.traditional401k);
+  const totalBalance = taxableBalance + rothBalance + trad401kBalance;
+
+  if (totalBalance === 0) {
+    return { stocks: 0, bonds: 0, cash: 0 };
+  }
+
+  const taxableAlloc = getInvestmentAllocation(investments.taxable);
+  const rothAlloc = getInvestmentAllocation(investments.rothIRA);
+  const trad401kAlloc = getInvestmentAllocation(investments.traditional401k);
+
+  // Weighted average allocation
+  const stocks = (
+    (taxableBalance * taxableAlloc.stocks +
+     rothBalance * rothAlloc.stocks +
+     trad401kBalance * trad401kAlloc.stocks) / totalBalance
+  );
+  
+  const bonds = (
+    (taxableBalance * taxableAlloc.bonds +
+     rothBalance * rothAlloc.bonds +
+     trad401kBalance * trad401kAlloc.bonds) / totalBalance
+  );
+  
+  const cash = (
+    (taxableBalance * (taxableAlloc.cash || 0) +
+     rothBalance * (rothAlloc.cash || 0) +
+     trad401kBalance * (trad401kAlloc.cash || 0)) / totalBalance
+  );
+
+  const other = (
+    (taxableBalance * (taxableAlloc.other || 0) +
+     rothBalance * (rothAlloc.other || 0) +
+     trad401kBalance * (trad401kAlloc.other || 0)) / totalBalance
+  );
+
+  return {
+    stocks: Math.round(stocks * 10) / 10,
+    bonds: Math.round(bonds * 10) / 10,
+    cash: Math.round(cash * 10) / 10,
+    other: other > 0 ? Math.round(other * 10) / 10 : undefined,
+  };
+}

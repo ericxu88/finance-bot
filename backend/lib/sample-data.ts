@@ -9,6 +9,7 @@ import type {
   UserProfile,
   FinancialAction,
 } from '../types/financial.js';
+import { getInvestmentBalance } from '../types/financial.js';
 
 // ============================================================================
 // SAMPLE USER: Sarah
@@ -27,9 +28,18 @@ export const sampleUser: UserProfile = {
     checking: 3000,
     savings: 8000,
     investments: {
-      taxable: 5000,
-      rothIRA: 0,
-      traditional401k: 0,
+      taxable: {
+        balance: 5000,
+        allocation: { stocks: 80, bonds: 15, cash: 5 }, // Moderate growth portfolio
+      },
+      rothIRA: {
+        balance: 0,
+        allocation: { stocks: 90, bonds: 10, cash: 0 }, // Aggressive for long-term growth
+      },
+      traditional401k: {
+        balance: 0,
+        allocation: { stocks: 70, bonds: 25, cash: 5 }, // Balanced for retirement
+      },
     },
   },
   
@@ -64,6 +74,13 @@ export const sampleUser: UserProfile = {
       monthlyBudget: 400,
       currentSpent: 0,
       transactions: [],
+      subcategories: [
+        { id: 'sub_produce', name: 'Produce', monthlyBudget: 120, currentSpent: 0 },
+        { id: 'sub_meat', name: 'Meat & Seafood', monthlyBudget: 100, currentSpent: 0 },
+        { id: 'sub_dairy', name: 'Dairy', monthlyBudget: 60, currentSpent: 0 },
+        { id: 'sub_pantry', name: 'Pantry Staples', monthlyBudget: 80, currentSpent: 0 },
+        { id: 'sub_snacks', name: 'Snacks & Beverages', monthlyBudget: 40, currentSpent: 0 },
+      ],
     },
     {
       id: 'cat_dining',
@@ -71,6 +88,11 @@ export const sampleUser: UserProfile = {
       monthlyBudget: 200,
       currentSpent: 0,
       transactions: [],
+      subcategories: [
+        { id: 'sub_restaurants', name: 'Restaurants', monthlyBudget: 120, currentSpent: 0 },
+        { id: 'sub_coffee', name: 'Coffee Shops', monthlyBudget: 40, currentSpent: 0 },
+        { id: 'sub_delivery', name: 'Food Delivery', monthlyBudget: 40, currentSpent: 0 },
+      ],
     },
     {
       id: 'cat_entertainment',
@@ -78,6 +100,11 @@ export const sampleUser: UserProfile = {
       monthlyBudget: 150,
       currentSpent: 0,
       transactions: [],
+      subcategories: [
+        { id: 'sub_streaming', name: 'Streaming Services', monthlyBudget: 40, currentSpent: 0 },
+        { id: 'sub_events', name: 'Events & Concerts', monthlyBudget: 60, currentSpent: 0 },
+        { id: 'sub_hobbies', name: 'Hobbies', monthlyBudget: 50, currentSpent: 0 },
+      ],
     },
   ],
   
@@ -126,7 +153,54 @@ export const sampleUser: UserProfile = {
         threshold: 1000,
       },
     ],
+    investmentPreferences: {
+      autoInvestEnabled: false,
+      reminderFrequency: 'monthly',
+      reminderDay: 15,
+      targetMonthlyInvestment: 500,
+      preferredAccount: 'taxable',
+      // lastInvestmentDate not set = first-time investor
+    },
   },
+  
+  // Upcoming one-time or scheduled expenses
+  upcomingExpenses: [
+    {
+      id: 'upcoming_car_insurance',
+      name: 'Car Insurance Premium',
+      amount: 450,
+      dueDate: new Date(new Date().setDate(new Date().getDate() + 15)).toISOString(),
+      isRecurring: true,
+      notes: 'Semi-annual payment',
+      status: 'pending',
+    },
+    {
+      id: 'upcoming_subscription_renewal',
+      name: 'Streaming Services Renewal',
+      amount: 89,
+      dueDate: new Date(new Date().setDate(new Date().getDate() + 7)).toISOString(),
+      isRecurring: true,
+      categoryId: 'entertainment',
+      status: 'pending',
+    },
+    {
+      id: 'upcoming_gym_annual',
+      name: 'Gym Annual Membership',
+      amount: 350,
+      dueDate: new Date(new Date().setDate(new Date().getDate() + 25)).toISOString(),
+      isRecurring: true,
+      notes: 'Annual fee due next month',
+      status: 'pending',
+    },
+    {
+      id: 'upcoming_medical_copay',
+      name: 'Doctor Visit Copay',
+      amount: 50,
+      dueDate: new Date(new Date().setDate(new Date().getDate() + 3)).toISOString(),
+      isRecurring: false,
+      status: 'pending',
+    },
+  ],
   
   createdAt: new Date('2026-01-01'),
   updatedAt: new Date('2026-01-31'),
@@ -162,7 +236,9 @@ export function calculateLiquidAssets(user: UserProfile): number {
  */
 export function calculateInvestedAssets(user: UserProfile): number {
   const inv = user.accounts.investments;
-  return inv.taxable + inv.rothIRA + inv.traditional401k;
+  return getInvestmentBalance(inv.taxable) + 
+         getInvestmentBalance(inv.rothIRA) + 
+         getInvestmentBalance(inv.traditional401k);
 }
 
 /**
@@ -268,7 +344,7 @@ console.log(`Monthly Income: $${sampleUser.monthlyIncome.toLocaleString()}`);
 console.log(`\nAssets:`);
 console.log(`  Checking: $${sampleUser.accounts.checking.toLocaleString()}`);
 console.log(`  Savings: $${sampleUser.accounts.savings.toLocaleString()}`);
-console.log(`  Taxable Investments: $${sampleUser.accounts.investments.taxable.toLocaleString()}`);
+console.log(`  Taxable Investments: $${getInvestmentBalance(sampleUser.accounts.investments.taxable).toLocaleString()}`);
 console.log(`  Total: $${calculateTotalAssets(sampleUser).toLocaleString()}`);
 console.log(`\nMonthly Cash Flow:`);
 console.log(`  Income: $${sampleUser.monthlyIncome.toLocaleString()}`);

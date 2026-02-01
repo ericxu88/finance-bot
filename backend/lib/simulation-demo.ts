@@ -13,12 +13,13 @@ import {
 } from './simulation-engine.js';
 
 import { sampleUser } from './sample-data.js';
+import { getInvestmentBalance } from '../types/financial.js';
 import type { FinancialAction } from '../types/financial.js';
 
 console.log('\n🎮 SIMULATION ENGINE DEMO');
 console.log('='.repeat(70));
 console.log(`User: ${sampleUser.name}`);
-console.log(`Assets: $${(sampleUser.accounts.checking + sampleUser.accounts.savings + sampleUser.accounts.investments.taxable).toLocaleString()}`);
+console.log(`Assets: $${(sampleUser.accounts.checking + sampleUser.accounts.savings + getInvestmentBalance(sampleUser.accounts.investments.taxable)).toLocaleString()}`);
 console.log(`Monthly Surplus: $2,250\n`);
 
 // ============================================================================
@@ -60,7 +61,7 @@ console.log(`Action: ${investSimulation.action.type} $${investSimulation.action.
 console.log(`Confidence: ${investSimulation.confidence}`);
 console.log(`\nIF YOU DO IT:`);
 console.log(`  Checking: $3,000 → $${investSimulation.scenarioIfDo.accountsAfter.checking.toLocaleString()}`);
-console.log(`  Taxable Investments: $5,000 → $${investSimulation.scenarioIfDo.accountsAfter.investments.taxable.toLocaleString()}`);
+    console.log(`  Taxable Investments: $5,000 → $${getInvestmentBalance(investSimulation.scenarioIfDo.accountsAfter.investments.taxable).toLocaleString()}`);
 
 if (investSimulation.scenarioIfDo.goalImpacts[0]) {
   const impact = investSimulation.scenarioIfDo.goalImpacts[0];

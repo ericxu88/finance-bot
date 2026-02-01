@@ -30,9 +30,18 @@ export const sampleUserSarah: UserProfile = {
     checking: 3200,
     savings: 8500,
     investments: {
-      taxable: 2400,
-      rothIRA: 12000,
-      traditional401k: 28000,
+      taxable: {
+        balance: 2400,
+        allocation: { stocks: 85, bonds: 10, cash: 5 }, // Growth-focused taxable account
+      },
+      rothIRA: {
+        balance: 12000,
+        allocation: { stocks: 90, bonds: 10, cash: 0 }, // Aggressive for long-term growth
+      },
+      traditional401k: {
+        balance: 28000,
+        allocation: { stocks: 70, bonds: 25, cash: 5 }, // Balanced for retirement
+      },
     },
   },
   
@@ -308,9 +317,18 @@ export const sampleSimulationResult: SimulationResult = {
       checking: 2700, // $3,200 - $500
       savings: 8500,
       investments: {
-        taxable: 2400,
-        rothIRA: 12500, // $12,000 + $500
-        traditional401k: 28000,
+        taxable: {
+          balance: 2400,
+          allocation: { stocks: 85, bonds: 10, cash: 5 },
+        },
+        rothIRA: {
+          balance: 12500, // $12,000 + $500
+          allocation: { stocks: 90, bonds: 10, cash: 0 },
+        },
+        traditional401k: {
+          balance: 28000,
+          allocation: { stocks: 70, bonds: 25, cash: 5 },
+        },
       },
     },
     
@@ -364,9 +382,18 @@ export const sampleSimulationResult: SimulationResult = {
       checking: 3200, // No change
       savings: 8500,
       investments: {
-        taxable: 2400,
-        rothIRA: 12000, // No change
-        traditional401k: 28000,
+        taxable: {
+          balance: 2400,
+          allocation: { stocks: 85, bonds: 10, cash: 5 },
+        },
+        rothIRA: {
+          balance: 12000, // No change
+          allocation: { stocks: 90, bonds: 10, cash: 0 },
+        },
+        traditional401k: {
+          balance: 28000,
+          allocation: { stocks: 70, bonds: 25, cash: 5 },
+        },
       },
     },
     

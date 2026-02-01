@@ -5,7 +5,7 @@
  * Makes the financial advisor feel human and helpful.
  */
 
-import type { SimulationResult, UserProfile, GoalImpact, BudgetImpact } from '../../types/financial.js';
+import type { SimulationResult, UserProfile, GoalImpact, BudgetImpact, Guardrail } from '../../types/financial.js';
 import type { OrchestrationResult } from '../agents/langchain-orchestrator.js';
 import type { ParsedIntent } from './intent-parser.js';
 
@@ -54,8 +54,8 @@ export function formatAnalysisResponse(
   // Add key simulation insights
   message += formatSimulationInsights(simulation);
   
-  // Add agent consensus
-  message += '\n\n' + formatAgentConsensus(analysis);
+  // Add data-driven analysis summary (not agent counts)
+  message += '\n\n' + formatDataDrivenAnalysis(simulation, analysis, userProfile);
   
   // Add specific concerns or highlights
   if (analysis.guardrailAnalysis.violated) {
@@ -65,14 +65,19 @@ export function formatAnalysisResponse(
   }
   
   if (analysis.validationAnalysis.contradictions_found.length > 0) {
-    message += '\n\n📊 **Note:** My analysis found some tradeoffs to consider: ';
-    message += analysis.validationAnalysis.contradictions_found
-      .map(c => c.description)
-      .join('; ');
+    // Filter out agent references from contradiction descriptions
+    const cleanedContradictions = analysis.validationAnalysis.contradictions_found
+      .map(c => sanitizeAgentReferences(c.description))
+      .filter(d => d.length > 0);
+    
+    if (cleanedContradictions.length > 0) {
+      message += '\n\n**Tradeoffs to consider:** ';
+      message += cleanedContradictions.join('; ');
+    }
   }
   
-  // Final recommendation
-  message += '\n\n**My recommendation:** ' + analysis.finalRecommendation;
+  // Final recommendation - sanitize any agent references
+  message += '\n\n**Bottom line:** ' + sanitizeAgentReferences(analysis.finalRecommendation);
   
   // Build suggested follow-ups
   const suggestedFollowUps = generateFollowUps(simulation, userProfile);
@@ -87,9 +92,9 @@ export function formatAnalysisResponse(
       budgeting: analysis.budgetingAnalysis.key_findings.join('. '),
       investment: analysis.investmentAnalysis.key_findings.join('. '),
       guardrails: analysis.guardrailAnalysis.can_proceed 
-        ? 'All guardrails pass'
+        ? 'All safety checks pass'
         : analysis.guardrailAnalysis.violations.map(v => v.rule_description).join('. '),
-      validation: `Confidence: ${analysis.overallConfidence}, Consensus: ${analysis.validationAnalysis.agent_consensus.consensus_level}`,
+      validation: `Confidence: ${analysis.overallConfidence}`,
     },
     suggestedFollowUps,
     shouldProceed: analysis.shouldProceed,
@@ -98,7 +103,7 @@ export function formatAnalysisResponse(
 }
 
 /**
- * Format a comparison of multiple options
+ * Format a comparison of multiple options - data-driven without agent references
  */
 export function formatComparisonResponse(
   options: Array<{ action: SimulationResult; analysis: OrchestrationResult }>,
@@ -110,20 +115,37 @@ export function formatComparisonResponse(
     const actionType = opt.action.action.type;
     const amount = opt.action.action.amount;
     const goalName = findGoalName(opt.action.action, userProfile);
+    const scenario = opt.action.scenarioIfDo;
     
     message += `**Option ${index + 1}: ${capitalizeFirst(actionType)} $${amount.toLocaleString()}${goalName ? ` → ${goalName}` : ''}**\n`;
     message += opt.analysis.shouldProceed ? '✅ Recommended\n' : '⚠️ Not recommended\n';
-    message += `• ${opt.action.reasoning}\n`;
-    message += `• Confidence: ${opt.analysis.overallConfidence}\n`;
     
-    // Goal impacts from scenarioIfDo
-    const goalImpacts = opt.action.scenarioIfDo.goalImpacts;
+    // Show actual impact data instead of generic reasoning
+    const goalImpacts = scenario.goalImpacts;
     if (goalImpacts && goalImpacts.length > 0) {
       const impact = goalImpacts[0];
       if (impact) {
-        message += `• Goal progress: +${impact.progressChangePct.toFixed(1)}% (${impact.timeSaved > 0 ? `${impact.timeSaved} months faster` : 'no time change'})\n`;
+        message += `• Goal progress: +${impact.progressChangePct.toFixed(1)}%`;
+        if (impact.timeSaved > 0) {
+          message += ` (reach goal ${impact.timeSaved} months sooner)`;
+        }
+        message += '\n';
       }
     }
+    
+    // Show liquidity impact
+    if (actionType === 'invest') {
+      message += `• Liquidity: Funds locked in investment\n`;
+      const projectedValue5yr = amount * Math.pow(1.07, 5);
+      message += `• 5-year projection: ~$${Math.round(projectedValue5yr).toLocaleString()}\n`;
+    } else if (actionType === 'save') {
+      message += `• Liquidity: Fully accessible\n`;
+      message += `• Growth: ~4% APY in high-yield savings\n`;
+    }
+    
+    // Account balance after
+    message += `• Checking after: $${scenario.accountsAfter.checking.toLocaleString()}\n`;
+    
     message += '\n';
   });
   
@@ -134,7 +156,12 @@ export function formatComparisonResponse(
   
   if (bestOption) {
     const bestAction = bestOption.action.action;
-    message += `**My pick:** ${capitalizeFirst(bestAction.type)} $${bestAction.amount.toLocaleString()} — ${bestOption.analysis.finalRecommendation}`;
+    const bestGoalName = findGoalName(bestAction, userProfile);
+    message += `**My recommendation:** ${capitalizeFirst(bestAction.type)} $${bestAction.amount.toLocaleString()}`;
+    if (bestGoalName) {
+      message += ` for ${bestGoalName}`;
+    }
+    message += ` — ${bestOption.analysis.finalRecommendation}`;
   }
   
   return {
@@ -292,6 +319,25 @@ function capitalizeFirst(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
+/**
+ * Remove references to internal agent architecture from user-facing text
+ */
+function sanitizeAgentReferences(text: string): string {
+  if (!text) return '';
+  
+  return text
+    // Remove agent name references
+    .replace(/\b(budgeting|investment|guardrail|validation)\s*agent/gi, 'analysis')
+    .replace(/\bagent\s*(a|b|1|2|3)\b/gi, '')
+    .replace(/\bagents?\b/gi, '')
+    // Remove internal decision terminology
+    .replace(/\bconsensus\s*(is|level|score)?\s*(unanimous|divided|strong|weak|moderate)?\b/gi, '')
+    .replace(/\b(domain\s*)?agents?\s*(approve|oppose|caution|recommend)/gi, 'the analysis suggests')
+    // Clean up resulting double spaces
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 function formatSimulationInsights(simulation: SimulationResult): string {
   const insights: string[] = [];
   const scenario = simulation.scenarioIfDo;
@@ -331,19 +377,84 @@ function formatSimulationInsights(simulation: SimulationResult): string {
   return insights.length > 0 ? insights.join('. ') + '.' : '';
 }
 
-function formatAgentConsensus(analysis: OrchestrationResult): string {
-  const consensus = analysis.validationAnalysis.agent_consensus;
-  const approving = consensus.agents_approving;
-  const cautioning = consensus.agents_cautioning;
-  const opposing = consensus.agents_opposing;
+/**
+ * Format a data-driven analysis summary instead of showing agent counts.
+ * Focuses on real numbers, impacts, and financial reasoning.
+ */
+function formatDataDrivenAnalysis(
+  simulation: SimulationResult,
+  analysis: OrchestrationResult,
+  userProfile: UserProfile
+): string {
+  const insights: string[] = [];
+  const scenario = simulation.scenarioIfDo;
+  const action = simulation.action;
   
-  if (consensus.consensus_level === 'strong' || consensus.consensus_level === 'unanimous') {
-    return `📊 All my analysis components agree: ${approving} approve, ${cautioning} suggest caution.`;
-  } else if (consensus.consensus_level === 'moderate') {
-    return `📊 My analysis is mixed: ${approving} approve, ${cautioning} suggest caution, ${opposing} oppose.`;
-  } else {
-    return `📊 My analysis shows some disagreement: ${approving} approve, ${cautioning} suggest caution, ${opposing} oppose. I'd recommend reviewing the details.`;
+  // Budget analysis - use actual numbers
+  if (analysis.budgetingAnalysis.key_findings.length > 0) {
+    // Get the most important budget finding
+    const budgetFinding = analysis.budgetingAnalysis.key_findings[0];
+    if (budgetFinding && !budgetFinding.includes('agent')) {
+      insights.push(`**Budget:** ${budgetFinding}`);
+    }
   }
+  
+  // Show remaining budget after this action
+  const monthlyIncome = userProfile.monthlyIncome;
+  const totalExpenses = userProfile.fixedExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const surplus = monthlyIncome - totalExpenses;
+  const remainingAfterAction = surplus - action.amount;
+  
+  if (remainingAfterAction < 500) {
+    insights.push(`**Flexibility:** This leaves you with $${remainingAfterAction.toLocaleString()} buffer this month`);
+  }
+  
+  // Investment analysis - focus on projected growth
+  if (action.type === 'invest' && analysis.investmentAnalysis.key_findings.length > 0) {
+    const investFinding = analysis.investmentAnalysis.key_findings[0];
+    if (investFinding && !investFinding.includes('agent')) {
+      insights.push(`**Growth potential:** ${investFinding}`);
+    }
+    
+    // Calculate projected value for investment
+    const projectedValue5yr = action.amount * Math.pow(1.07, 5);
+    insights.push(`In 5 years at 7% avg return: **~$${Math.round(projectedValue5yr).toLocaleString()}**`);
+  }
+  
+  // Account impact - show actual numbers
+  const checkingAfter = scenario.accountsAfter.checking;
+  const savingsAfter = scenario.accountsAfter.savings;
+  
+  if (action.type === 'save' || action.type === 'spend') {
+    insights.push(`**After this action:** Checking: $${checkingAfter.toLocaleString()} | Savings: $${savingsAfter.toLocaleString()}`);
+  }
+  
+  // Risk assessment based on user's profile
+  if (userProfile.preferences.riskTolerance === 'conservative' && action.type === 'invest') {
+    insights.push(`**Note:** Given your conservative risk preference, consider starting with a smaller amount`);
+  } else if (userProfile.preferences.riskTolerance === 'aggressive' && action.type === 'save') {
+    insights.push(`**Consider:** With your aggressive risk profile, investing could yield higher returns`);
+  }
+  
+  // Guardrail status - plain English
+  if (analysis.guardrailAnalysis.can_proceed) {
+    const checkingGuardrail = userProfile.preferences.guardrails.find((g: Guardrail) => g.accountId === 'checking' && g.type === 'min_balance');
+    const checkingMin = checkingGuardrail?.threshold;
+    if (checkingMin && checkingAfter > checkingMin + 500) {
+      insights.push(`✅ Your checking stays safely above your $${checkingMin.toLocaleString()} minimum`);
+    }
+  }
+  
+  // Confidence explanation based on data, not agents
+  if (analysis.overallConfidence === 'high') {
+    insights.push(`**Confidence:** High — this aligns well with your goals and constraints`);
+  } else if (analysis.overallConfidence === 'medium') {
+    insights.push(`**Confidence:** Medium — there are some trade-offs to weigh`);
+  } else if (analysis.overallConfidence === 'low') {
+    insights.push(`**Confidence:** Lower — I'd recommend more caution here`);
+  }
+  
+  return insights.join('\n');
 }
 
 function formatSimulationDetails(simulation: SimulationResult): string {

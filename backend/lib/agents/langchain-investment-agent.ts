@@ -6,6 +6,7 @@
 
 import { LangChainBaseAgent, type AgentContext } from './langchain-base.js';
 import { InvestmentAnalysisSchema } from './schemas.js';
+import { getInvestmentBalance } from '../../types/financial.js';
 
 export class LangChainInvestmentAgent extends LangChainBaseAgent<typeof InvestmentAnalysisSchema> {
   readonly agentName = 'Investment Agent';
@@ -57,9 +58,9 @@ Output your analysis in the specified JSON format.`;
       : 5;
 
     const totalInvestments =
-      user.accounts.investments.taxable +
-      user.accounts.investments.rothIRA +
-      user.accounts.investments.traditional401k;
+      getInvestmentBalance(user.accounts.investments.taxable) +
+      getInvestmentBalance(user.accounts.investments.rothIRA) +
+      getInvestmentBalance(user.accounts.investments.traditional401k);
 
     const totalAssets =
       user.accounts.checking +
@@ -72,9 +73,9 @@ INVESTMENT ANALYSIS REQUEST
 USER INVESTMENT PROFILE:
 - Risk Tolerance: ${user.preferences.riskTolerance}
 - Current Investment Portfolio: ${this.formatCurrency(totalInvestments)}
-  * Taxable Account: ${this.formatCurrency(user.accounts.investments.taxable)}
-  * Roth IRA: ${this.formatCurrency(user.accounts.investments.rothIRA)}
-  * 401(k): ${this.formatCurrency(user.accounts.investments.traditional401k)}
+  * Taxable Account: ${this.formatCurrency(getInvestmentBalance(user.accounts.investments.taxable))}
+  * Roth IRA: ${this.formatCurrency(getInvestmentBalance(user.accounts.investments.rothIRA))}
+  * 401(k): ${this.formatCurrency(getInvestmentBalance(user.accounts.investments.traditional401k))}
 - Total Assets: ${this.formatCurrency(totalAssets)}
 - Current Investment Allocation: ${this.formatPercent(totalInvestments / totalAssets)}
 

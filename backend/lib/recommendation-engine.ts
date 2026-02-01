@@ -237,7 +237,10 @@ export function generateGoalSummary(user: UserProfile): GoalSummary[] {
   
   return user.goals.map((goal): GoalSummary => {
     const remainingAmount = Math.max(0, goal.targetAmount - goal.currentAmount);
-    const progress = (goal.currentAmount / goal.targetAmount) * 100;
+    // Handle $0 target edge case (treat as 100% complete to avoid NaN)
+    const progress = goal.targetAmount > 0 
+      ? (goal.currentAmount / goal.targetAmount) * 100 
+      : (goal.currentAmount >= 0 ? 100 : 0);
     const monthsRemaining = monthsUntilDeadline(goal.deadline);
     
     // Calculate monthly amount needed to hit deadline

@@ -5,7 +5,7 @@
  * Coordinates intent parsing, simulation, analysis, and response formatting.
  */
 
-import { IntentParser, MockIntentParser, type ParsedIntent } from './intent-parser.js';
+import { IntentParser, MockIntentParser, type ParsedIntent, type ConversationMessage } from './intent-parser.js';
 import {
   conversationStore,
   resolveIntentWithContext,
@@ -30,6 +30,7 @@ import { LangChainAgentOrchestrator } from '../agents/langchain-orchestrator.js'
 import { MockAgentOrchestrator } from '../agents/mock-orchestrator.js';
 import { UnifiedAgent } from '../agents/unified-agent.js';
 import { analyzeFinancialHealth, generateGoalSummary } from '../recommendation-engine.js';
+import { actionExecutor, type ActionResult } from './action-executor.js';
 import type { UserProfile, FinancialAction, SimulationResult } from '../../types/financial.js';
 
 export interface ChatRequest {
@@ -115,9 +116,15 @@ export class ChatHandler {
           user_intent_summary: `${parsedAction.type} $${parsedAction.amount}`,
         };
       } else {
-        // Step 1: Parse intent (slow path - uses LLM if available)
-        console.log(`[ChatHandler] Parsing intent for: "${message.substring(0, 50)}..."`);
-        intent = await this.intentParser.parse(message, userProfile);
+        // Build conversation history for context-aware parsing
+        const conversationHistory: ConversationMessage[] = context.messages.map(msg => ({
+          role: msg.role,
+          content: msg.content,
+        }));
+        
+        // Step 1: Parse intent with conversation context (uses LLM if available)
+        console.log(`[ChatHandler] Parsing intent for: "${message.substring(0, 50)}..." (with ${conversationHistory.length} messages of context)`);
+        intent = await this.intentParser.parse(message, userProfile, conversationHistory);
         
         // Step 2: Resolve with conversation context (for follow-up questions)
         intent = resolveIntentWithContext(intent, context, userProfile);
@@ -159,6 +166,23 @@ export class ChatHandler {
             intent.clarification_question || "Could you tell me more about what you'd like to do?",
             userProfile
           );
+          break;
+        
+        // NEW: Action intents that modify user data
+        case 'transfer_money':
+          reply = await this.handleTransferMoney(intent, userProfile, context);
+          break;
+          
+        case 'create_goal':
+          reply = await this.handleCreateGoal(intent, userProfile, context);
+          break;
+          
+        case 'update_budget':
+          reply = await this.handleUpdateBudget(intent, userProfile, context);
+          break;
+          
+        case 'execute_action':
+          reply = await this.handleExecuteAction(intent, userProfile, context, useFastMode);
           break;
           
         case 'general_question':
@@ -481,6 +505,9 @@ export class ChatHandler {
     response += "• **Compare options:** 'Save $500 vs invest $500'\n";
     response += "• **Get recommendations:** 'What should I do?'\n";
     response += "• **Check progress:** 'How are my goals doing?'\n";
+    response += "• **Move money:** 'Transfer $500 from checking to savings'\n";
+    response += "• **Create goals:** 'I want to save for a vacation'\n";
+    response += "• **Update budget:** 'Increase my dining budget to $300'\n";
     
     return {
       message: response,
@@ -488,12 +515,370 @@ export class ChatHandler {
       suggestedFollowUps: [
         'What should I do with my extra money?',
         'How are my goals progressing?',
-        'Should I invest $500 for my house fund?',
-        'Compare saving vs investing',
+        'Transfer $500 from checking to savings',
+        'Create a goal for a new car',
       ],
       shouldProceed: true,
       confidence: 'high',
     };
+  }
+
+  // ============================================================================
+  // ACTION HANDLERS - Modify user data
+  // ============================================================================
+
+  private async handleTransferMoney(
+    intent: ParsedIntent,
+    userProfile: UserProfile,
+    context: ConversationContext
+  ): Promise<FormattedResponse> {
+    const transfer = intent.transfer;
+    
+    // Validate we have the required information
+    if (!transfer?.from_account || !transfer?.to_account || !transfer?.amount) {
+      // Ask for missing information
+      const missing: string[] = [];
+      if (!transfer?.amount) missing.push('amount');
+      if (!transfer?.from_account) missing.push('source account (checking or savings)');
+      if (!transfer?.to_account) missing.push('destination account');
+      
+      return {
+        message: `I'd be happy to help you transfer money! I just need a few more details:\n\n${missing.map(m => `• What ${m}?`).join('\n')}\n\nFor example: "Transfer $500 from checking to savings"`,
+        summary: 'Need transfer details',
+        suggestedFollowUps: [
+          'Transfer $500 from checking to savings',
+          'Move $300 from savings to checking',
+          'Transfer $200 from checking to investments',
+        ],
+        shouldProceed: false,
+        confidence: 'low',
+      };
+    }
+    
+    // Store pending action for confirmation
+    context.pendingAction = {
+      type: 'transfer',
+      data: {
+        fromAccount: transfer.from_account,
+        toAccount: transfer.to_account,
+        amount: transfer.amount,
+      },
+    };
+    
+    // Ask for confirmation
+    return {
+      message: `I'll transfer **$${transfer.amount.toLocaleString()}** from your **${transfer.from_account}** to your **${transfer.to_account}**.\n\n` +
+        `**Current balances:**\n` +
+        `• ${transfer.from_account}: $${this.getAccountBalance(userProfile, transfer.from_account).toLocaleString()}\n` +
+        `• ${transfer.to_account}: $${this.getAccountBalance(userProfile, transfer.to_account).toLocaleString()}\n\n` +
+        `**After transfer:**\n` +
+        `• ${transfer.from_account}: $${(this.getAccountBalance(userProfile, transfer.from_account) - transfer.amount).toLocaleString()}\n` +
+        `• ${transfer.to_account}: $${(this.getAccountBalance(userProfile, transfer.to_account) + transfer.amount).toLocaleString()}\n\n` +
+        `Would you like me to proceed with this transfer?`,
+      summary: `Transfer $${transfer.amount.toLocaleString()} ready`,
+      suggestedFollowUps: [
+        'Yes, do it',
+        'No, cancel',
+        'Change the amount',
+      ],
+      shouldProceed: true,
+      confidence: 'high',
+    };
+  }
+
+  private async handleCreateGoal(
+    intent: ParsedIntent,
+    userProfile: UserProfile,
+    context: ConversationContext
+  ): Promise<FormattedResponse> {
+    const newGoal = intent.new_goal;
+    
+    // Validate we have the required information
+    if (!newGoal?.name || !newGoal?.target_amount) {
+      const missing: string[] = [];
+      if (!newGoal?.name) missing.push('goal name (e.g., "New Car", "Vacation")');
+      if (!newGoal?.target_amount) missing.push('target amount');
+      
+      return {
+        message: `Great idea to set a new goal! I need a bit more information:\n\n${missing.map(m => `• ${m}`).join('\n')}\n\nFor example: "Create a goal for a car with $15,000 in 2 years"`,
+        summary: 'Need goal details',
+        suggestedFollowUps: [
+          'Save $5,000 for a vacation',
+          'Create a goal for a car: $15,000',
+          'Start saving $10,000 for education',
+        ],
+        shouldProceed: false,
+        confidence: 'low',
+      };
+    }
+    
+    // Store pending action for confirmation
+    context.pendingAction = {
+      type: 'create_goal',
+      data: {
+        name: newGoal.name,
+        targetAmount: newGoal.target_amount,
+        deadlineMonths: newGoal.deadline_months || 12,
+        priority: newGoal.priority || userProfile.goals.length + 1,
+      },
+    };
+    
+    const deadline = new Date();
+    deadline.setMonth(deadline.getMonth() + (newGoal.deadline_months || 12));
+    
+    return {
+      message: `I'll create a new goal for you:\n\n` +
+        `**Goal:** ${newGoal.name}\n` +
+        `**Target:** $${newGoal.target_amount.toLocaleString()}\n` +
+        `**Deadline:** ${deadline.toLocaleDateString()} (${newGoal.deadline_months || 12} months)\n` +
+        `**Priority:** ${newGoal.priority || userProfile.goals.length + 1}\n\n` +
+        `To reach this goal, you'd need to save about **$${Math.round(newGoal.target_amount / (newGoal.deadline_months || 12)).toLocaleString()}/month**.\n\n` +
+        `Would you like me to create this goal?`,
+      summary: `Create goal: ${newGoal.name}`,
+      suggestedFollowUps: [
+        'Yes, create it',
+        'No, cancel',
+        'Change the target amount',
+      ],
+      shouldProceed: true,
+      confidence: 'high',
+    };
+  }
+
+  private async handleUpdateBudget(
+    intent: ParsedIntent,
+    userProfile: UserProfile,
+    context: ConversationContext
+  ): Promise<FormattedResponse> {
+    const budgetUpdate = intent.budget_update;
+    
+    // Validate we have the required information
+    if (!budgetUpdate?.category_name || !budgetUpdate?.new_amount) {
+      const categories = userProfile.spendingCategories.map(c => c.name).join(', ');
+      
+      return {
+        message: `I can help you update your budget! I need to know:\n\n` +
+          `• Which category? (${categories})\n` +
+          `• What's the new budget amount?\n\n` +
+          `For example: "Set dining budget to $250" or "Increase groceries by $50"`,
+        summary: 'Need budget details',
+        suggestedFollowUps: [
+          'Set dining budget to $250',
+          'Increase groceries to $500',
+          'Decrease entertainment by $50',
+        ],
+        shouldProceed: false,
+        confidence: 'low',
+      };
+    }
+    
+    // Find current category
+    const category = userProfile.spendingCategories.find(c => 
+      c.name.toLowerCase() === budgetUpdate.category_name?.toLowerCase() ||
+      c.id.toLowerCase() === budgetUpdate.category_name?.toLowerCase()
+    );
+    
+    if (!category) {
+      const categories = userProfile.spendingCategories.map(c => c.name).join(', ');
+      return {
+        message: `I couldn't find a budget category called "${budgetUpdate.category_name}".\n\n` +
+          `Available categories: ${categories}\n\n` +
+          `Try: "Set dining budget to $250"`,
+        summary: 'Category not found',
+        suggestedFollowUps: userProfile.spendingCategories.slice(0, 3).map(c => 
+          `Update ${c.name} budget`
+        ),
+        shouldProceed: false,
+        confidence: 'low',
+      };
+    }
+    
+    // Store pending action
+    context.pendingAction = {
+      type: 'update_budget',
+      data: {
+        categoryName: category.name,
+        newAmount: budgetUpdate.new_amount,
+        action: budgetUpdate.action || 'set',
+      },
+    };
+    
+    return {
+      message: `I'll update your **${category.name}** budget:\n\n` +
+        `**Current budget:** $${category.monthlyBudget.toLocaleString()}/month\n` +
+        `**New budget:** $${budgetUpdate.new_amount.toLocaleString()}/month\n` +
+        `**Change:** ${budgetUpdate.new_amount > category.monthlyBudget ? '+' : ''}$${(budgetUpdate.new_amount - category.monthlyBudget).toLocaleString()}\n\n` +
+        `Would you like me to make this change?`,
+      summary: `Update ${category.name} budget`,
+      suggestedFollowUps: [
+        'Yes, update it',
+        'No, cancel',
+        'Show all budgets',
+      ],
+      shouldProceed: true,
+      confidence: 'high',
+    };
+  }
+
+  private async handleExecuteAction(
+    _intent: ParsedIntent,
+    userProfile: UserProfile,
+    context: ConversationContext,
+    _useFastMode: boolean
+  ): Promise<FormattedResponse> {
+    // Check if there's a pending action to execute
+    if (!context.pendingAction) {
+      // Try to find the last suggested action from conversation
+      const lastAction = this.extractLastSuggestedAction(context);
+      
+      if (!lastAction) {
+        return {
+          message: `I'm not sure what action you'd like me to execute. Could you be more specific?\n\n` +
+            `For example:\n` +
+            `• "Transfer $500 from checking to savings"\n` +
+            `• "Create a goal for a car"\n` +
+            `• "Invest $300 in my taxable account"`,
+          summary: 'No pending action',
+          suggestedFollowUps: [
+            'Transfer $500 from checking to savings',
+            'Save $300 toward my emergency fund',
+            'Create a goal for a vacation',
+          ],
+          shouldProceed: false,
+          confidence: 'low',
+        };
+      }
+      
+      // Use the last suggested action
+      context.pendingAction = lastAction;
+    }
+    
+    // Execute the pending action
+    const pendingAction = context.pendingAction;
+    const data = pendingAction.data;
+    let result: ActionResult;
+    
+    switch (pendingAction.type) {
+      case 'transfer':
+        result = actionExecutor.executeTransfer(userProfile, {
+          fromAccount: data.fromAccount as string,
+          toAccount: data.toAccount as string,
+          amount: data.amount as number,
+        });
+        break;
+        
+      case 'create_goal':
+        result = actionExecutor.createGoal(userProfile, {
+          name: data.name as string,
+          targetAmount: data.targetAmount as number,
+          deadlineMonths: data.deadlineMonths as number | undefined,
+          priority: data.priority as number | undefined,
+        });
+        break;
+        
+      case 'update_budget':
+        result = actionExecutor.updateBudget(userProfile, {
+          categoryName: data.categoryName as string,
+          newAmount: data.newAmount as number | undefined,
+          action: (data.action as 'increase' | 'decrease' | 'set') || 'set',
+        });
+        break;
+        
+      case 'save':
+      case 'invest':
+      case 'spend':
+        result = actionExecutor.executeSimulatedAction(
+          userProfile,
+          pendingAction.type as 'save' | 'invest' | 'spend',
+          data.amount as number,
+          data.goalId as string | undefined,
+          data.targetAccount as string | undefined
+        );
+        break;
+        
+      default:
+        result = { success: false, message: 'Unknown action type.' };
+    }
+    
+    // Clear pending action after execution attempt
+    context.pendingAction = undefined;
+    
+    // Return result
+    if (result.success) {
+      return {
+        message: `✅ **Done!** ${result.message}\n\n${result.details || ''}\n\n` +
+          (result.changes && result.changes.length > 0 
+            ? `**Changes made:**\n${result.changes.map(c => `• ${c.field}: $${typeof c.oldValue === 'number' ? c.oldValue.toLocaleString() : c.oldValue} → $${typeof c.newValue === 'number' ? c.newValue.toLocaleString() : c.newValue}`).join('\n')}`
+            : ''),
+        summary: result.message,
+        suggestedFollowUps: [
+          'Check my goal progress',
+          'What should I do next?',
+          "Show my account balances",
+        ],
+        shouldProceed: true,
+        confidence: 'high',
+      };
+    } else {
+      return {
+        message: `❌ **Could not complete:** ${result.message}\n\n` +
+          `Would you like to try a different amount or action?`,
+        summary: 'Action failed',
+        suggestedFollowUps: [
+          'Try a smaller amount',
+          'Check my account balances',
+          'What can I afford?',
+        ],
+        shouldProceed: false,
+        confidence: 'high',
+      };
+    }
+  }
+
+  // ============================================================================
+  // HELPER METHODS
+  // ============================================================================
+
+  private getAccountBalance(user: UserProfile, accountName: string): number {
+    switch (accountName.toLowerCase()) {
+      case 'checking': return user.accounts.checking;
+      case 'savings': return user.accounts.savings;
+      default: return 0;
+    }
+  }
+
+  private extractLastSuggestedAction(context: ConversationContext): { type: string; data: Record<string, unknown> } | null {
+    // Look through recent assistant messages for suggested actions
+    const recentMessages = context.messages.slice(-6).reverse();
+    
+    for (const msg of recentMessages) {
+      if (msg.role !== 'assistant') continue;
+      
+      // Check for transfer suggestion
+      const transferMatch = msg.content.match(/transfer\s+\*?\*?\$?([\d,]+)\*?\*?\s+from\s+\*?\*?(\w+)\*?\*?\s+to\s+\*?\*?(\w+)/i);
+      if (transferMatch && transferMatch[1] && transferMatch[2] && transferMatch[3]) {
+        return {
+          type: 'transfer',
+          data: {
+            amount: parseFloat(transferMatch[1].replace(/,/g, '')),
+            fromAccount: transferMatch[2],
+            toAccount: transferMatch[3],
+          },
+        };
+      }
+      
+      // Check for save/invest suggestion
+      const actionMatch = msg.content.match(/(save|invest|saving|investing)\s+\*?\*?\$?([\d,]+)/i);
+      if (actionMatch && actionMatch[1] && actionMatch[2]) {
+        const type = actionMatch[1].toLowerCase().includes('invest') ? 'invest' : 'save';
+        return {
+          type,
+          data: { amount: parseFloat(actionMatch[2].replace(/,/g, '')) },
+        };
+      }
+    }
+    
+    return null;
   }
 
   private formatUnifiedResponse(

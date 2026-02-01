@@ -10,6 +10,7 @@ import { StructuredOutputParser } from '@langchain/core/output_parsers';
 import { PromptTemplate } from '@langchain/core/prompts';
 import { RunnableSequence } from '@langchain/core/runnables';
 import type { UserProfile, FinancialAction, SimulationResult } from '../../types/financial.js';
+import { getInvestmentBalance } from '../../types/financial.js';
 import type { z } from 'zod';
 
 export interface AgentContext {
@@ -209,9 +210,9 @@ IF USER PROCEEDS:
 - Checking balance: ${this.formatCurrency(sim.scenarioIfDo.accountsAfter.checking)}
 - Savings balance: ${this.formatCurrency(sim.scenarioIfDo.accountsAfter.savings)}
 - Investment accounts: ${this.formatCurrency(
-      sim.scenarioIfDo.accountsAfter.investments.taxable +
-      sim.scenarioIfDo.accountsAfter.investments.rothIRA +
-      sim.scenarioIfDo.accountsAfter.investments.traditional401k
+      getInvestmentBalance(sim.scenarioIfDo.accountsAfter.investments.taxable) +
+      getInvestmentBalance(sim.scenarioIfDo.accountsAfter.investments.rothIRA) +
+      getInvestmentBalance(sim.scenarioIfDo.accountsAfter.investments.traditional401k)
     )}
 
 Goal Impacts:

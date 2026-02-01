@@ -24,9 +24,18 @@ export const sarah: UserProfile = {
     checking: 3000,
     savings: 8000,
     investments: {
-      taxable: 5000,
-      rothIRA: 12000,
-      traditional401k: 0,
+      taxable: {
+        balance: 5000,
+        allocation: { stocks: 80, bonds: 15, cash: 5 }, // Moderate growth
+      },
+      rothIRA: {
+        balance: 12000,
+        allocation: { stocks: 90, bonds: 10, cash: 0 }, // Aggressive for long-term
+      },
+      traditional401k: {
+        balance: 0,
+        allocation: { stocks: 70, bonds: 25, cash: 5 }, // Balanced for retirement
+      },
     },
   },
 
@@ -184,9 +193,18 @@ export const marcus: UserProfile = {
     checking: 5000,
     savings: 15000,
     investments: {
-      taxable: 45000,
-      rothIRA: 28000,
-      traditional401k: 85000,
+      taxable: {
+        balance: 45000,
+        allocation: { stocks: 75, bonds: 20, cash: 5 }, // Balanced for experienced investor
+      },
+      rothIRA: {
+        balance: 28000,
+        allocation: { stocks: 85, bonds: 15, cash: 0 }, // Growth-focused
+      },
+      traditional401k: {
+        balance: 85000,
+        allocation: { stocks: 65, bonds: 30, cash: 5 }, // Conservative for retirement
+      },
     },
   },
 
@@ -350,9 +368,18 @@ export const elena: UserProfile = {
     checking: 2500,
     savings: 12000,
     investments: {
-      taxable: 1500,
-      rothIRA: 8000,
-      traditional401k: 15000,
+      taxable: {
+        balance: 1500,
+        allocation: { stocks: 60, bonds: 35, cash: 5 }, // Conservative allocation
+      },
+      rothIRA: {
+        balance: 8000,
+        allocation: { stocks: 70, bonds: 25, cash: 5 }, // Moderate for conservative saver
+      },
+      traditional401k: {
+        balance: 15000,
+        allocation: { stocks: 60, bonds: 35, cash: 5 }, // Conservative for retirement
+      },
     },
   },
 

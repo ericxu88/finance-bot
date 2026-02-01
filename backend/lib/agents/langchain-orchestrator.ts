@@ -9,6 +9,8 @@ import { LangChainInvestmentAgent } from './langchain-investment-agent.js';
 import { LangChainGuardrailAgent } from './langchain-guardrail-agent.js';
 import { LangChainValidationAgent } from './langchain-validation-agent.js';
 import type { AgentContext } from './langchain-base.js';
+import type { Accounts } from '../../types/financial.js';
+import { getInvestmentBalance } from '../../types/financial.js';
 import type { z } from 'zod';
 import {
   BudgetingAnalysisSchema,
@@ -232,11 +234,7 @@ export class LangChainAgentOrchestrator {
   }
 
   private getAccountBalance(
-    accounts: {
-      checking: number;
-      savings: number;
-      investments: { taxable: number; rothIRA: number; traditional401k: number };
-    },
+    accounts: Accounts,
     accountId: string
   ): number {
     switch (accountId) {
@@ -245,11 +243,11 @@ export class LangChainAgentOrchestrator {
       case 'savings':
         return accounts.savings;
       case 'taxable':
-        return accounts.investments.taxable;
+        return getInvestmentBalance(accounts.investments.taxable);
       case 'rothIRA':
-        return accounts.investments.rothIRA;
+        return getInvestmentBalance(accounts.investments.rothIRA);
       case 'traditional401k':
-        return accounts.investments.traditional401k;
+        return getInvestmentBalance(accounts.investments.traditional401k);
       default:
         return 0;
     }

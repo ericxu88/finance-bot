@@ -16,6 +16,7 @@ import {
 
 import { sampleUser } from '../sample-data.js';
 import type { FinancialAction, FinancialGoal } from '../../types/financial.js';
+import { getInvestmentBalance } from '../../types/financial.js';
 
 // ============================================================================
 // HELPER FUNCTIONS FOR TESTING
@@ -105,7 +106,7 @@ assert(
   'Checking should decrease by $500'
 );
 assert(
-  investResult.scenarioIfDo.accountsAfter.investments.taxable === 5500,
+  getInvestmentBalance(investResult.scenarioIfDo.accountsAfter.investments.taxable) === 5500,
   'Taxable investment should increase from $5,000 to $5,500'
 );
 

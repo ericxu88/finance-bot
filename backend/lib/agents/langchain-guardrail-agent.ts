@@ -6,6 +6,7 @@
 
 import { LangChainBaseAgent, type AgentContext } from './langchain-base.js';
 import { GuardrailAnalysisSchema } from './schemas.js';
+import { getInvestmentBalance } from '../../types/financial.js';
 
 export class LangChainGuardrailAgent extends LangChainBaseAgent<typeof GuardrailAnalysisSchema> {
   readonly agentName = 'Guardrail Agent';
@@ -70,16 +71,16 @@ ACCOUNT BALANCES:
 Before Action:
 - Checking: ${this.formatCurrency(accountsBefore.checking)}
 - Savings: ${this.formatCurrency(accountsBefore.savings)}
-- Taxable Investments: ${this.formatCurrency(accountsBefore.investments.taxable)}
-- Roth IRA: ${this.formatCurrency(accountsBefore.investments.rothIRA)}
-- 401(k): ${this.formatCurrency(accountsBefore.investments.traditional401k)}
+- Taxable Investments: ${this.formatCurrency(getInvestmentBalance(accountsBefore.investments.taxable))}
+- Roth IRA: ${this.formatCurrency(getInvestmentBalance(accountsBefore.investments.rothIRA))}
+- 401(k): ${this.formatCurrency(getInvestmentBalance(accountsBefore.investments.traditional401k))}
 
 After Action:
 - Checking: ${this.formatCurrency(accountsAfter.checking)} ${this.delta(accountsBefore.checking, accountsAfter.checking)}
 - Savings: ${this.formatCurrency(accountsAfter.savings)} ${this.delta(accountsBefore.savings, accountsAfter.savings)}
-- Taxable Investments: ${this.formatCurrency(accountsAfter.investments.taxable)} ${this.delta(accountsBefore.investments.taxable, accountsAfter.investments.taxable)}
-- Roth IRA: ${this.formatCurrency(accountsAfter.investments.rothIRA)} ${this.delta(accountsBefore.investments.rothIRA, accountsAfter.investments.rothIRA)}
-- 401(k): ${this.formatCurrency(accountsAfter.investments.traditional401k)} ${this.delta(accountsBefore.investments.traditional401k, accountsAfter.investments.traditional401k)}
+- Taxable Investments: ${this.formatCurrency(getInvestmentBalance(accountsAfter.investments.taxable))} ${this.delta(getInvestmentBalance(accountsBefore.investments.taxable), getInvestmentBalance(accountsAfter.investments.taxable))}
+- Roth IRA: ${this.formatCurrency(getInvestmentBalance(accountsAfter.investments.rothIRA))} ${this.delta(getInvestmentBalance(accountsBefore.investments.rothIRA), getInvestmentBalance(accountsAfter.investments.rothIRA))}
+- 401(k): ${this.formatCurrency(getInvestmentBalance(accountsAfter.investments.traditional401k))} ${this.delta(getInvestmentBalance(accountsBefore.investments.traditional401k), getInvestmentBalance(accountsAfter.investments.traditional401k))}
 
 PROPOSED ACTION:
 ${action.type.toUpperCase()} ${this.formatCurrency(action.amount)}
