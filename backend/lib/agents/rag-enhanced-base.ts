@@ -118,5 +118,5 @@ ${r.principle}
   /**
    * Override buildAnalysisPrompt to include RAG context if available
    */
-  protected abstract buildAnalysisPrompt(context: AgentContext | EnhancedAgentContext): string;
+  protected abstract buildAnalysisPrompt(context: AgentContext | EnhancedAgentContext): Promise<string>;
 }

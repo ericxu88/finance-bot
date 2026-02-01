@@ -4,7 +4,7 @@
  * Verifies that the OpenAI model configuration works without making unnecessary API calls
  */
 
-import { LangChainBaseAgent } from '../lib/agents/langchain-base.js';
+import { LangChainBaseAgent, type AgentContext } from '../lib/agents/langchain-base.js';
 import { BudgetingAnalysisSchema } from '../lib/agents/schemas.js';
 import { sampleUser } from '../lib/sample-data.js';
 import { simulate_save } from '../lib/simulation-engine.js';
@@ -16,7 +16,7 @@ class TestAgent extends LangChainBaseAgent<typeof BudgetingAnalysisSchema> {
   readonly schema = BudgetingAnalysisSchema;
   readonly systemPrompt = 'You are a test agent.';
 
-  protected buildAnalysisPrompt() {
+  protected async buildAnalysisPrompt(_context: AgentContext): Promise<string> {
     return 'Test prompt';
   }
 

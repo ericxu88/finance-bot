@@ -69,7 +69,7 @@ Output your analysis in the specified JSON format.`;
     `.trim();
   }
 
-  protected buildAnalysisPrompt(context: AgentContext | EnhancedAgentContext): string {
+  protected async buildAnalysisPrompt(context: AgentContext | EnhancedAgentContext): Promise<string> {
     const { user, action, simulationResult, historicalMetrics } = context;
     const ragContext = (context as EnhancedAgentContext).ragContext;
 

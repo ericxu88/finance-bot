@@ -84,7 +84,7 @@ Output a comprehensive validation in the specified JSON format.`;
     } as any);
   }
 
-  protected buildAnalysisPrompt(context: any): string {
+  protected async buildAnalysisPrompt(context: any): Promise<string> {
     const {
       action,
       historicalMetrics,

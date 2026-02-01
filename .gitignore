@@ -38,3 +38,12 @@ coverage/
 tmp/
 temp/
 *.tmp
+
+# Ingested data (optional JSONL from HuggingFace etc.)
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+.Python
+venv/

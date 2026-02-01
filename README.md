@@ -57,6 +57,12 @@ finance-bot/
 - **Guardrail Agent**: Deterministic constraint enforcement
 - **Citations**: All recommendations reference specific historical patterns or principles
 
+### 2. **Live Financial Data & Multi-Source RAG** ⭐ NEW
+- **Live fetch (not embedded):** Yahoo Finance (stock data), FRED (economic indicators), market indices – fetched on-demand by the Investment Agent.
+- **Vector DB (embedded):** Curated knowledge, FinTextQA (financial Q&A), FRED indicator descriptions, financial news – searched at query time.
+- **Python microservice** (`services/financial-data/`): Runs on port 5001; backend calls it for live market and economic context.
+- **Ingestion scripts:** `npm run ingest:financial-data` populates `financial_knowledge_real` and `financial_news` from FinTextQA, FRED descriptions, and news (with fallback samples if no external data).
+
 ### Core Types
 
 #### 1. **User & Accounts**
@@ -177,9 +183,34 @@ Tests:
 - Financial knowledge retrieval
 
 > **Note**: RAG uses OpenAI embeddings (`text-embedding-3-small` by default; set `OPENAI_EMBEDDING_MODEL` to override).
-- **simulation-engine** – simulate_save, simulate_invest, compare_options, constraints
+
+### Test RAG multi-source retrieval
+
+```bash
+npm run test:rag-multi-source
+```
+
+Verifies that RAG retrieves from all three sources: **financial_knowledge** (curated), **financial_knowledge_real** (FRED descriptions + FinTextQA), and **financial_news**. Uses built-in/sample data only — **no FRED API key or Python service required**. Requires `OPENAI_API_KEY` in `.env` for embeddings.
 
 The execute-api test starts the app on a random port (requires network permission in restricted environments).
+
+### Ingest Financial Data (FinTextQA, FRED, News)
+
+```bash
+npm run ingest:financial-data
+```
+
+Populates `financial_knowledge_real` and `financial_news` in the vector store. Requires `OPENAI_API_KEY` for embeddings. Optional: add `data/fintextqa.jsonl` and `data/financial_news.jsonl` (see scripts) for full datasets; otherwise built-in samples are used.
+
+Individual steps: `npm run ingest:fintextqa`, `npm run ingest:fred`, `npm run ingest:news`.
+
+### Start Financial Data Service (Live Market Data)
+
+```bash
+npm run start:financial-service
+```
+
+Starts the Python service on port 5001 (Yahoo Finance, FRED). Set `FINANCIAL_DATA_SERVICE_URL=http://localhost:5001` and optionally `FRED_API_KEY` (free at https://fred.stlouisfed.org/docs/api/api_key.html). See `services/financial-data/README.md`.
 
 ### Run LangChain Multi-Agent Demo
 

@@ -1,0 +1,5 @@
+flask==3.0.0
+flask-cors==4.0.0
+yfinance==0.2.32
+fredapi==0.5.1
+pandas==2.1.3

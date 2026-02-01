@@ -54,7 +54,7 @@ export abstract class LangChainBaseAgent<TSchema extends z.ZodType> {
   /**
    * Build the analysis prompt for this specific agent
    */
-  protected abstract buildAnalysisPrompt(context: AgentContext): string;
+  protected abstract buildAnalysisPrompt(context: AgentContext): Promise<string>;
 
   /**
    * Strip markdown code blocks from LLM output
@@ -116,7 +116,7 @@ export abstract class LangChainBaseAgent<TSchema extends z.ZodType> {
       this.parser = StructuredOutputParser.fromZodSchema(this.schema);
 
       // Build the complete prompt
-      const userPrompt = this.buildAnalysisPrompt(context);
+      const userPrompt = await this.buildAnalysisPrompt(context);
       const formatInstructions = this.parser.getFormatInstructions();
 
       // Create the chain - get raw text first, then parse manually

@@ -49,7 +49,7 @@ Warnings (don't block but flag):
 
 Output your analysis in the specified JSON format with complete violation details.`;
 
-  protected buildAnalysisPrompt(context: AgentContext): string {
+  protected async buildAnalysisPrompt(context: AgentContext): Promise<string> {
     const { user, action, simulationResult } = context;
 
     const accountsAfter = simulationResult.scenarioIfDo.accountsAfter;

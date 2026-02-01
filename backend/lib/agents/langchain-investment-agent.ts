@@ -1,12 +1,16 @@
 /**
  * LangChain Investment Agent (RAG-Enhanced)
  * 
- * Analyzes investment decisions and goal alignment with historical context and financial knowledge
+ * Analyzes investment decisions with live market data, economic indicators,
+ * and RAG-retrieved financial knowledge (curated + FinTextQA + FRED + news).
  */
 
 import { RAGEnhancedAgent, type EnhancedAgentContext } from './rag-enhanced-base.js';
 import { InvestmentAnalysisSchema } from './schemas.js';
 import type { AgentContext } from './langchain-base.js';
+import { liveDataClient } from '../financial-data/live-data-client.js';
+import { vectorStore } from '../rag/vector-store.js';
+import { knowledgeBase } from '../rag/knowledge-base.js';
 
 export class LangChainInvestmentAgent extends RAGEnhancedAgent<typeof InvestmentAnalysisSchema> {
   readonly agentName = 'Investment Agent';
@@ -75,13 +79,80 @@ Output your analysis in the specified JSON format.`;
     `.trim();
   }
 
-  protected buildAnalysisPrompt(context: AgentContext | EnhancedAgentContext): string {
+  /**
+   * Extended knowledge: curated + financial_knowledge_real (FinTextQA, FRED) + financial_news
+   */
+  protected override async getKnowledgeContext(context: AgentContext): Promise<string> {
+    const query = this.buildKnowledgeQuery(context);
+    const [curated, realDocs, newsDocs] = await Promise.all([
+      knowledgeBase.search(query, 3),
+      vectorStore.search('financial_knowledge_real', query, 3).catch(() => []),
+      vectorStore.search('financial_news', query, 2).catch(() => []),
+    ]);
+
+    const parts: string[] = [];
+
+    if (curated.length > 0) {
+      parts.push('RELEVANT FINANCIAL PRINCIPLES:\n' + curated.map((r, i) =>
+        `[${i + 1}] ${r.category}:\n${r.principle}\n(Source: ${r.source})`
+      ).join('\n\n'));
+    }
+    if (realDocs.length > 0) {
+      parts.push('RELEVANT FINANCIAL Q&A / INDICATOR CONTEXT:\n' + realDocs.map((d, i) =>
+        `[${i + 1}] ${(d.metadata.source as string) || 'FinTextQA/FRED'}:\n${d.pageContent}`
+      ).join('\n\n'));
+    }
+    if (newsDocs.length > 0) {
+      parts.push('RELEVANT MARKET CONTEXT (NEWS):\n' + newsDocs.map((d, i) =>
+        `[${i + 1}] ${(d.metadata.source as string) || 'News'}:\n${d.pageContent}`
+      ).join('\n\n'));
+    }
+
+    if (parts.length === 0) return 'No relevant financial principles or market context found.';
+    return parts.join('\n\n═══════════════════════════════════════════════════════════\n\n');
+  }
+
+  protected async buildAnalysisPrompt(context: AgentContext | EnhancedAgentContext): Promise<string> {
     const { user, action, simulationResult } = context;
     const ragContext = (context as EnhancedAgentContext).ragContext;
 
     // Only do deep analysis for invest actions
     if (action.type !== 'invest') {
       return this.buildNonInvestmentPrompt(context, ragContext);
+    }
+
+    // Live fetch: economic indicators and market summary (NOT embedded)
+    let economicContext = '';
+    let marketContext = '';
+    try {
+      const [indicators, market] = await Promise.all([
+        liveDataClient.getEconomicIndicators(),
+        liveDataClient.getMarketSummary(),
+      ]);
+      if (indicators?.indicators) {
+        const ind = indicators.indicators;
+        economicContext = `
+CURRENT ECONOMIC CONDITIONS (LIVE):
+${ind.inflation_rate ? `- ${ind.inflation_rate.name}: ${ind.inflation_rate.current_value.toFixed(2)} (${ind.inflation_rate.change >= 0 ? '↑' : '↓'} ${Math.abs(ind.inflation_rate.change).toFixed(2)})` : ''}
+${ind.fed_funds_rate ? `- ${ind.fed_funds_rate.name}: ${ind.fed_funds_rate.current_value.toFixed(2)}%` : ''}
+${ind.unemployment_rate ? `- ${ind.unemployment_rate.name}: ${ind.unemployment_rate.current_value.toFixed(2)}%` : ''}
+${ind['10y_treasury'] ? `- ${ind['10y_treasury'].name}: ${ind['10y_treasury'].current_value.toFixed(2)}%` : ''}
+
+Source: Federal Reserve Economic Data (${indicators.metadata?.fetched_at ?? 'live'})
+        `.trim();
+      }
+      if (market?.indices && Object.keys(market.indices).length > 0) {
+        marketContext = `
+CURRENT MARKET CONDITIONS (LIVE):
+${Object.entries(market.indices).map(([, data]) =>
+          `- ${data.name}: ${data.current != null ? data.current.toFixed(2) : 'N/A'} (${data.change_percent >= 0 ? '+' : ''}${data.change_percent.toFixed(2)}%)`
+        ).join('\n')}
+
+Source: Live market data (${market.metadata?.fetched_at ?? 'live'})
+        `.trim();
+      }
+    } catch (e) {
+      console.warn('[Investment Agent] Live data fetch failed:', e);
     }
 
     const goal = user.goals.find(g => g.id === action.goalId);
@@ -103,6 +174,9 @@ Output your analysis in the specified JSON format.`;
 
     return `
 INVESTMENT ANALYSIS REQUEST
+
+${economicContext ? `${economicContext}\n\n` : ''}
+${marketContext ? `${marketContext}\n\n` : ''}
 
 USER INVESTMENT PROFILE:
 - Risk Tolerance: ${user.preferences.riskTolerance}
