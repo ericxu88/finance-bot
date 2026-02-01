@@ -42,7 +42,7 @@ export abstract class LangChainBaseAgent<TSchema extends z.ZodType> {
       );
     }
 
-    const modelName = process.env.OPENAI_MODEL?.trim() || 'gpt-4o-mini';
+    const modelName = process.env.OPENAI_MODEL?.trim() || 'o1-preview';
     this.model = new ChatOpenAI({
       model: modelName,
       temperature,

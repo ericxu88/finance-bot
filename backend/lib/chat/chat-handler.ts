@@ -168,7 +168,20 @@ export class ChatHandler {
           );
           break;
         
-        // NEW: Action intents that modify user data
+        // QUICK QUERIES: No LLM needed, instant responses
+        case 'check_balance':
+          reply = this.handleCheckBalance(userProfile);
+          break;
+          
+        case 'list_goals':
+          reply = this.handleListGoals(userProfile);
+          break;
+          
+        case 'show_budget':
+          reply = this.handleShowBudget(intent, userProfile);
+          break;
+        
+        // Action intents that modify user data
         case 'transfer_money':
           reply = await this.handleTransferMoney(intent, userProfile, context);
           break;
@@ -443,6 +456,195 @@ export class ChatHandler {
   private handleCheckGoalProgress(userProfile: UserProfile): FormattedResponse {
     const goalSummaries = generateGoalSummary(userProfile);
     return formatGoalProgressResponse(goalSummaries);
+  }
+
+  // ============================================================================
+  // QUICK QUERY HANDLERS - Instant responses without LLM
+  // ============================================================================
+
+  private handleCheckBalance(userProfile: UserProfile): FormattedResponse {
+    const checking = userProfile.accounts.checking;
+    const savings = userProfile.accounts.savings;
+    const taxable = typeof userProfile.accounts.investments.taxable === 'number' 
+      ? userProfile.accounts.investments.taxable 
+      : userProfile.accounts.investments.taxable?.balance || 0;
+    const rothIRA = typeof userProfile.accounts.investments.rothIRA === 'number'
+      ? userProfile.accounts.investments.rothIRA
+      : userProfile.accounts.investments.rothIRA?.balance || 0;
+    const traditional401k = typeof userProfile.accounts.investments.traditional401k === 'number'
+      ? userProfile.accounts.investments.traditional401k
+      : userProfile.accounts.investments.traditional401k?.balance || 0;
+    
+    const totalLiquid = checking + savings;
+    const totalInvested = taxable + rothIRA + traditional401k;
+    const totalAssets = totalLiquid + totalInvested;
+    
+    let message = `**Your Account Balances:**\n\n`;
+    message += `💳 **Checking:** $${checking.toLocaleString()}\n`;
+    message += `💰 **Savings:** $${savings.toLocaleString()}\n`;
+    message += `\n**Investments:**\n`;
+    message += `📈 Taxable: $${taxable.toLocaleString()}\n`;
+    message += `🏦 Roth IRA: $${rothIRA.toLocaleString()}\n`;
+    message += `🏛️ 401(k): $${traditional401k.toLocaleString()}\n`;
+    message += `\n**Totals:**\n`;
+    message += `• Liquid (checking + savings): $${totalLiquid.toLocaleString()}\n`;
+    message += `• Invested: $${totalInvested.toLocaleString()}\n`;
+    message += `• **Total Assets: $${totalAssets.toLocaleString()}**`;
+    
+    return {
+      message,
+      summary: `Total assets: $${totalAssets.toLocaleString()}`,
+      suggestedFollowUps: [
+        'Transfer money between accounts',
+        'How are my goals doing?',
+        'What should I do with my extra money?',
+      ],
+      shouldProceed: true,
+      confidence: 'high',
+    };
+  }
+
+  private handleListGoals(userProfile: UserProfile): FormattedResponse {
+    if (userProfile.goals.length === 0) {
+      return {
+        message: `You don't have any financial goals set up yet.\n\n` +
+          `Would you like to create one? For example:\n` +
+          `• "Create a goal for a vacation"\n` +
+          `• "I want to save $10,000 for a car"`,
+        summary: 'No goals yet',
+        suggestedFollowUps: [
+          'Create a goal for a vacation',
+          'Save for an emergency fund',
+          'Start a house down payment goal',
+        ],
+        shouldProceed: true,
+        confidence: 'high',
+      };
+    }
+    
+    let message = `**Your Financial Goals:**\n\n`;
+    
+    for (const goal of userProfile.goals) {
+      const progress = (goal.currentAmount / goal.targetAmount) * 100;
+      const remaining = goal.targetAmount - goal.currentAmount;
+      const deadline = new Date(goal.deadline);
+      const monthsLeft = Math.max(0, Math.ceil((deadline.getTime() - Date.now()) / (1000 * 60 * 60 * 24 * 30)));
+      const monthlyNeeded = monthsLeft > 0 ? remaining / monthsLeft : remaining;
+      
+      const progressBar = this.createProgressBar(progress);
+      const statusEmoji = progress >= 100 ? '✅' : progress >= 75 ? '🟢' : progress >= 50 ? '🟡' : '🔴';
+      
+      message += `${statusEmoji} **${goal.name}** (Priority ${goal.priority})\n`;
+      message += `   ${progressBar} ${progress.toFixed(0)}%\n`;
+      message += `   $${goal.currentAmount.toLocaleString()} / $${goal.targetAmount.toLocaleString()}\n`;
+      message += `   📅 ${monthsLeft} months left • Need ~$${Math.round(monthlyNeeded).toLocaleString()}/mo\n\n`;
+    }
+    
+    return {
+      message,
+      summary: `${userProfile.goals.length} goals tracked`,
+      suggestedFollowUps: [
+        'How can I reach my goals faster?',
+        'Create a new goal',
+        'Save toward my top goal',
+      ],
+      shouldProceed: true,
+      confidence: 'high',
+    };
+  }
+
+  private handleShowBudget(intent: ParsedIntent, userProfile: UserProfile): FormattedResponse {
+    const queriedCategory = intent.budget_update?.category_name;
+    
+    if (queriedCategory) {
+      // Show specific category
+      const category = userProfile.spendingCategories.find(c => 
+        c.name.toLowerCase() === queriedCategory.toLowerCase()
+      );
+      
+      if (!category) {
+        const available = userProfile.spendingCategories.map(c => c.name).join(', ');
+        return {
+          message: `I couldn't find a category called "${queriedCategory}".\n\nAvailable categories: ${available}`,
+          summary: 'Category not found',
+          suggestedFollowUps: userProfile.spendingCategories.slice(0, 3).map(c => `Show ${c.name} budget`),
+          shouldProceed: true,
+          confidence: 'high',
+        };
+      }
+      
+      const percentUsed = category.monthlyBudget > 0 
+        ? (category.currentSpent / category.monthlyBudget) * 100 
+        : 0;
+      const remaining = category.monthlyBudget - category.currentSpent;
+      const progressBar = this.createProgressBar(percentUsed);
+      
+      let message = `**${category.name} Budget:**\n\n`;
+      message += `${progressBar} ${percentUsed.toFixed(0)}% used\n\n`;
+      message += `• Budget: $${category.monthlyBudget.toLocaleString()}/month\n`;
+      message += `• Spent: $${category.currentSpent.toLocaleString()}\n`;
+      message += `• Remaining: $${remaining.toLocaleString()}\n`;
+      
+      if (category.subcategories && category.subcategories.length > 0) {
+        message += `\n**Subcategories:**\n`;
+        for (const sub of category.subcategories) {
+          const subPercent = sub.monthlyBudget > 0 ? (sub.currentSpent / sub.monthlyBudget) * 100 : 0;
+          message += `• ${sub.name}: $${sub.currentSpent.toLocaleString()} / $${sub.monthlyBudget.toLocaleString()} (${subPercent.toFixed(0)}%)\n`;
+        }
+      }
+      
+      return {
+        message,
+        summary: `${category.name}: ${percentUsed.toFixed(0)}% used`,
+        suggestedFollowUps: [
+          `Update ${category.name} budget`,
+          'Show all budgets',
+          'What should I cut back on?',
+        ],
+        shouldProceed: true,
+        confidence: 'high',
+      };
+    }
+    
+    // Show all budgets overview
+    let message = `**Your Monthly Budget Overview:**\n\n`;
+    
+    let totalBudget = 0;
+    let totalSpent = 0;
+    
+    for (const category of userProfile.spendingCategories) {
+      totalBudget += category.monthlyBudget;
+      totalSpent += category.currentSpent;
+      
+      const percentUsed = category.monthlyBudget > 0 
+        ? (category.currentSpent / category.monthlyBudget) * 100 
+        : 0;
+      const statusEmoji = percentUsed >= 100 ? '🔴' : percentUsed >= 80 ? '🟡' : '🟢';
+      
+      message += `${statusEmoji} **${category.name}:** $${category.currentSpent.toLocaleString()} / $${category.monthlyBudget.toLocaleString()} (${percentUsed.toFixed(0)}%)\n`;
+    }
+    
+    const totalPercent = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
+    message += `\n**Total:** $${totalSpent.toLocaleString()} / $${totalBudget.toLocaleString()} (${totalPercent.toFixed(0)}%)\n`;
+    message += `**Remaining:** $${(totalBudget - totalSpent).toLocaleString()}`;
+    
+    return {
+      message,
+      summary: `Budget ${totalPercent.toFixed(0)}% used`,
+      suggestedFollowUps: [
+        'Update a budget category',
+        'Where am I overspending?',
+        'What should I do with leftover budget?',
+      ],
+      shouldProceed: true,
+      confidence: 'high',
+    };
+  }
+
+  private createProgressBar(percent: number): string {
+    const filled = Math.min(10, Math.round(percent / 10));
+    const empty = 10 - filled;
+    return '█'.repeat(filled) + '░'.repeat(empty);
   }
 
   private async handleExplainTradeoffs(

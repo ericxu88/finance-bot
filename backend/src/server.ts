@@ -13,6 +13,7 @@ import {
   compare_options,
 } from '../lib/simulation-engine.js';
 import { sampleUser } from '../lib/sample-data.js';
+import { getUserState, resetUserState, userStateManager } from '../lib/user-state.js';
 import { calculateHistoricalMetrics } from '../lib/agents/historical-metrics.js';
 import { LangChainAgentOrchestrator } from '../lib/agents/langchain-orchestrator.js';
 import { MockAgentOrchestrator } from '../lib/agents/mock-orchestrator.js';
@@ -255,6 +256,32 @@ app.get('/sample', (_req: Request, res: Response) => {
   return res.status(200).json(sampleUser);
 });
 
+// ============================================================================
+// USER PROFILE ENDPOINTS (Live State)
+// ============================================================================
+
+/**
+ * GET /user/profile - Get current user profile state
+ * Returns the live, mutable user state (not the static sample data)
+ */
+app.get('/user/profile', (_req: Request, res: Response) => {
+  const userState = getUserState();
+  return res.status(200).json(userState);
+});
+
+/**
+ * POST /user/profile/reset - Reset user state to sample data
+ * Useful for demos and testing
+ */
+app.post('/user/profile/reset', (_req: Request, res: Response) => {
+  resetUserState();
+  const userState = getUserState();
+  return res.status(200).json({
+    message: 'User state reset to sample data',
+    user: userState,
+  });
+});
+
 app.get('/api-docs', (_req: Request, res: Response) => {
   // Return OpenAPI spec as JSON
   try {
@@ -461,6 +488,25 @@ app.post('/goals/summary', (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Error in /goals/summary endpoint:', error);
+    return res.status(500).json({
+      error: 'Goal summary generation failed',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * GET /goals/summary/sample
+ * Get goal summary for live user state (demo endpoint)
+ */
+app.get('/goals/summary/sample', (_req: Request, res: Response) => {
+  try {
+    const user = getUserState();
+    const goalSummaries = generateGoalSummary(user);
+
+    return res.status(200).json(goalSummaries);
+  } catch (error) {
+    console.error('Error in /goals/summary/sample endpoint:', error);
     return res.status(500).json({
       error: 'Goal summary generation failed',
       message: error instanceof Error ? error.message : String(error),
@@ -866,8 +912,8 @@ app.post('/chat', async (req: Request, res: Response) => {
 
   const { message, userId, conversationId, userProfile, fastMode, parsedAction } = parsed.data;
 
-  // Use provided profile or fall back to sample user for demos
-  const profile = userProfile || sampleUser;
+  // Use provided profile or fall back to live user state
+  const profile = userProfile || getUserState();
 
   try {
     const response = await chatHandler.handleMessage({
@@ -924,7 +970,7 @@ app.post('/chat/stream', async (req: Request, res: Response): Promise<void> => {
   }
 
   const { message, userId, conversationId, userProfile } = parsed.data;
-  const profile = userProfile || sampleUser;
+  const profile = userProfile || getUserState();
 
   // Set up SSE
   res.setHeader('Content-Type', 'text/event-stream');
@@ -992,8 +1038,8 @@ app.post('/chat/stream', async (req: Request, res: Response): Promise<void> => {
 app.post('/budget/analysis', (req: Request, res: Response) => {
   const parsed = userProfileSchema.safeParse(req.body.user ?? req.body);
   
-  // Allow using sample user if no user provided
-  const user = parsed.success ? parsed.data : sampleUser;
+  // Allow using live user state if no user provided
+  const user = parsed.success ? parsed.data : getUserState();
   
   try {
     const analysis = analyzeBudget(user);
@@ -1023,7 +1069,8 @@ app.post('/budget/analysis', (req: Request, res: Response) => {
  */
 app.get('/budget/analysis/sample', (_req: Request, res: Response) => {
   try {
-    const analysis = analyzeBudget(sampleUser);
+    const user = getUserState();
+    const analysis = analyzeBudget(user);
     const summaryMessage = getBudgetSummaryMessage(analysis);
     
     return res.status(200).json({
@@ -1031,7 +1078,7 @@ app.get('/budget/analysis/sample', (_req: Request, res: Response) => {
       message: summaryMessage,
       metadata: {
         timestamp: new Date().toISOString(),
-        userId: sampleUser.id,
+        userId: user.id,
       },
     });
   } catch (error) {
@@ -1050,13 +1097,14 @@ app.get('/budget/analysis/sample', (_req: Request, res: Response) => {
  */
 app.get('/budget/underspending/sample', (_req: Request, res: Response) => {
   try {
-    const analysis = detectUnderspending(sampleUser);
+    const user = getUserState();
+    const analysis = detectUnderspending(user);
     
     return res.status(200).json({
       analysis,
       metadata: {
         timestamp: new Date().toISOString(),
-        userId: sampleUser.id,
+        userId: user.id,
       },
     });
   } catch (error) {
@@ -1075,13 +1123,14 @@ app.get('/budget/underspending/sample', (_req: Request, res: Response) => {
  */
 app.get('/budget/upcoming/sample', (_req: Request, res: Response) => {
   try {
-    const analysis = analyzeUpcomingExpenses(sampleUser);
+    const user = getUserState();
+    const analysis = analyzeUpcomingExpenses(user);
     
     return res.status(200).json({
       analysis,
       metadata: {
         timestamp: new Date().toISOString(),
-        userId: sampleUser.id,
+        userId: user.id,
       },
     });
   } catch (error) {
@@ -1105,8 +1154,8 @@ app.get('/budget/upcoming/sample', (_req: Request, res: Response) => {
 app.post('/investments/reminders', (req: Request, res: Response) => {
   const parsed = userProfileSchema.safeParse(req.body.user ?? req.body);
   
-  // Allow using sample user if no user provided
-  const user = parsed.success ? parsed.data : sampleUser;
+  // Allow using live user state if no user provided
+  const user = parsed.success ? parsed.data : getUserState();
   
   try {
     const reminder = generateInvestmentReminder(user);
@@ -1156,7 +1205,8 @@ app.post('/investments/reminders', (req: Request, res: Response) => {
  */
 app.get('/investments/reminders/sample', (_req: Request, res: Response) => {
   try {
-    const reminder = generateInvestmentReminder(sampleUser);
+    const user = getUserState();
+    const reminder = generateInvestmentReminder(user);
     
     if (!reminder) {
       return res.status(200).json({
@@ -1179,7 +1229,7 @@ app.get('/investments/reminders/sample', (_req: Request, res: Response) => {
       },
       metadata: {
         timestamp: new Date().toISOString(),
-        userId: sampleUser.id,
+        userId: user.id,
       },
     });
   } catch (error) {
@@ -1191,9 +1241,160 @@ app.get('/investments/reminders/sample', (_req: Request, res: Response) => {
   }
 });
 
+// ============================================================================
+// TRANSACTION EXECUTION ENDPOINT
+// ============================================================================
+
+const executeTransactionSchema = z.object({
+  type: z.enum(['save', 'invest', 'transfer']),
+  amount: z.number().positive(),
+  fromAccountId: z.string().min(1),
+  toAccountId: z.string().optional(),
+  goalId: z.string().optional(),
+  description: z.string().optional(),
+});
+
+/**
+ * POST /transactions/execute
+ * 
+ * Execute a financial transaction (save, invest, or transfer)
+ * Updates the user's account balances and goal progress
+ */
+app.post('/transactions/execute', (req: Request, res: Response) => {
+  const parsed = executeTransactionSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: 'Invalid request payload',
+      details: parsed.error.flatten(),
+    });
+  }
+
+  const { type, amount, fromAccountId, toAccountId, goalId, description } = parsed.data;
+
+  try {
+    const user = getUserState();
+    
+    // Validate source account has sufficient funds
+    let sourceBalance = 0;
+    if (fromAccountId === 'checking') {
+      sourceBalance = user.accounts.checking;
+    } else if (fromAccountId === 'savings') {
+      sourceBalance = user.accounts.savings;
+    }
+    
+    if (sourceBalance < amount) {
+      return res.status(400).json({
+        success: false,
+        message: `Insufficient funds in ${fromAccountId}. Available: $${sourceBalance.toLocaleString()}`,
+      });
+    }
+
+    // Execute the transaction based on type
+    if (type === 'save' && goalId) {
+      // Saving to a goal - transfer from checking/savings to goal
+      const goal = user.goals.find(g => g.id === goalId);
+      if (!goal) {
+        return res.status(400).json({
+          success: false,
+          message: `Goal "${goalId}" not found`,
+        });
+      }
+
+      // Update account balance
+      if (fromAccountId === 'checking') {
+        userStateManager.updateAccounts({ checking: user.accounts.checking - amount });
+      } else if (fromAccountId === 'savings') {
+        userStateManager.updateAccounts({ savings: user.accounts.savings - amount });
+      }
+
+      // Update goal progress
+      userStateManager.updateGoal(goalId, {
+        currentAmount: goal.currentAmount + amount,
+      });
+
+      // Also add to savings if saving
+      if (fromAccountId === 'checking') {
+        userStateManager.updateAccounts({ savings: user.accounts.savings + amount });
+      }
+
+      const updatedUser = getUserState();
+      const updatedGoal = updatedUser.goals.find(g => g.id === goalId);
+      const progressPct = updatedGoal ? (updatedGoal.currentAmount / updatedGoal.targetAmount) * 100 : 0;
+
+      console.log(`[Transaction] Saved $${amount} to goal "${goal.name}" from ${fromAccountId}`);
+
+      return res.status(200).json({
+        success: true,
+        message: `Successfully saved $${amount.toLocaleString()} to ${goal.name}`,
+        transactionId: `txn_${Date.now()}`,
+        updatedUser,
+        goalUpdate: {
+          goalId,
+          newAmount: updatedGoal?.currentAmount,
+          percentageComplete: progressPct,
+        },
+      });
+    } else if (type === 'invest') {
+      // Investing - transfer from checking to investment account
+      const targetAccount = toAccountId || 'taxable';
+      const result = userStateManager.transferMoney(fromAccountId, targetAccount, amount);
+      
+      if (!result.success) {
+        return res.status(400).json({
+          success: false,
+          message: result.message,
+        });
+      }
+
+      const updatedUser = getUserState();
+      console.log(`[Transaction] Invested $${amount} from ${fromAccountId} to ${targetAccount}`);
+
+      return res.status(200).json({
+        success: true,
+        message: `Successfully invested $${amount.toLocaleString()} into your investment account`,
+        transactionId: `txn_${Date.now()}`,
+        updatedUser,
+      });
+    } else if (type === 'transfer') {
+      // Generic transfer between accounts
+      const target = toAccountId || 'savings';
+      const result = userStateManager.transferMoney(fromAccountId, target, amount);
+      
+      if (!result.success) {
+        return res.status(400).json({
+          success: false,
+          message: result.message,
+        });
+      }
+
+      const updatedUser = getUserState();
+      console.log(`[Transaction] Transferred $${amount} from ${fromAccountId} to ${target}`);
+
+      return res.status(200).json({
+        success: true,
+        message: result.message,
+        transactionId: `txn_${Date.now()}`,
+        updatedUser,
+      });
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid transaction type or missing required parameters',
+      });
+    }
+  } catch (error) {
+    console.error('Error in /transactions/execute endpoint:', error);
+    return res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
 app.listen(port, () => {
   console.log(`API listening on http://localhost:${port}`);
   console.log(`Chat endpoint available at POST /chat`);
   console.log(`Budget analysis available at GET /budget/analysis/sample`);
   console.log(`Investment reminders available at GET /investments/reminders/sample`);
+  console.log(`Transaction execution available at POST /transactions/execute`);
 });

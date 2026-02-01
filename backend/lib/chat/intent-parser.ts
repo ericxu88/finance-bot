@@ -30,11 +30,15 @@ export const ParsedIntentSchema = z.object({
     'explain_tradeoffs',    // User wants to understand tradeoffs
     'general_question',     // General financial question
     'clarification_needed', // Can't understand, need more info
-    // NEW: Action intents for modifying data
+    // Action intents for modifying data
     'transfer_money',       // User wants to move money between accounts
     'create_goal',          // User wants to create a new financial goal
     'update_budget',        // User wants to modify a budget category
     'execute_action',       // User confirms to execute a previously suggested action
+    // Quick query intents (no LLM needed)
+    'check_balance',        // User asks about account balance(s)
+    'list_goals',           // User asks to see their goals
+    'show_budget',          // User asks about budget/spending
   ]),
   
   // For simulate_action intent
@@ -103,7 +107,7 @@ export class IntentParser {
       throw new Error('OPENAI_API_KEY (or OPEN_AI_API_KEY) required for chat functionality. Get one at https://platform.openai.com/api-keys');
     }
     
-    const modelName = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+    const modelName = process.env.OPENAI_MODEL || 'o1-preview';
     
     this.model = new ChatOpenAI({
       model: modelName,
@@ -183,6 +187,9 @@ INTENT TYPES:
 - create_goal: User wants to CREATE a new financial goal (e.g., "I want to save for a car")
 - update_budget: User wants to CHANGE their budget allocations (e.g., "Increase my dining budget to $300")
 - execute_action: User confirms they want to execute a previously suggested or simulated action (e.g., "Yes, do it", "Go ahead")
+- check_balance: User asks about their account balance(s) (e.g., "What's my checking balance?", "How much do I have?")
+- list_goals: User asks to see their financial goals (e.g., "What are my goals?", "Show me my savings goals")
+- show_budget: User asks about their budget or spending (e.g., "How much have I spent on dining?", "What's my budget?")
 
 {format_instructions}
 
@@ -333,7 +340,89 @@ export class MockIntentParser {
     let intentType: ParsedIntent['intent_type'] = 'general_question';
     let actionType: 'save' | 'invest' | 'spend' | null = null;
     
-    // NEW: Detect transfer intent
+    // QUICK QUERIES: Detect balance, goals, budget queries (no LLM needed)
+    const balancePatterns = [
+      /(?:what(?:'s| is)|how much|show|check|my)\s+(?:my\s+)?(?:checking|savings|balance|account)/i,
+      /(?:balance|money|funds)\s+(?:in|do i have)/i,
+      /how much (?:do i have|money|is in)/i,
+      /(?:checking|savings)\s+(?:balance|account)/i,
+    ];
+    const isBalanceQuery = balancePatterns.some(p => p.test(message));
+    
+    const goalsPatterns = [
+      /(?:what|show|list|see)\s+(?:are\s+)?(?:my\s+)?goals?/i,
+      /(?:my\s+)?(?:financial\s+)?goals?\s+(?:list|status|progress)/i,
+      /(?:show|tell)\s+me\s+(?:my\s+)?goals?/i,
+    ];
+    const isGoalsQuery = goalsPatterns.some(p => p.test(message));
+    
+    const budgetPatterns2 = [
+      /(?:what(?:'s| is)|how much|show|check)\s+(?:my\s+)?(?:budget|spending)/i,
+      /(?:spent|spending)\s+(?:on|in|for)\s+\w+/i,
+      /budget\s+(?:for|on)\s+\w+/i,
+      /how much (?:have i|did i) (?:spend|spent)/i,
+    ];
+    const isBudgetQuery = budgetPatterns2.some(p => p.test(message));
+    
+    // Handle quick queries first (they take priority)
+    if (isBalanceQuery) {
+      return {
+        intent_type: 'check_balance',
+        mentioned_goals: [],
+        mentioned_amounts: [],
+        confidence: 'high',
+        clarification_question: null,
+        user_intent_summary: 'User wants to check account balance',
+      };
+    }
+    
+    if (isGoalsQuery) {
+      return {
+        intent_type: 'list_goals',
+        mentioned_goals: mentionedGoals,
+        mentioned_amounts: [],
+        confidence: 'high',
+        clarification_question: null,
+        user_intent_summary: 'User wants to see their financial goals',
+      };
+    }
+    
+    // Check if this is a budget UPDATE (not just a query)
+    const budgetUpdatePatterns = [
+      /(?:change|update|set|adjust|increase|decrease|modify)\s+(?:my\s+)?(?:\w+\s+)?budget/i,
+      /budget\s+(?:for\s+)?\w+\s+(?:to|should be|at)\s+\$?\d+/i,
+    ];
+    const isBudgetUpdateIntent = budgetUpdatePatterns.some(p => p.test(message));
+    
+    if (isBudgetQuery && !isBudgetUpdateIntent) {
+      // Extract category if mentioned
+      const categories = ['groceries', 'dining', 'entertainment', 'shopping', 'transportation', 'utilities'];
+      let queriedCategory: string | null = null;
+      for (const cat of categories) {
+        if (lowerMessage.includes(cat)) {
+          queriedCategory = cat;
+          break;
+        }
+      }
+      
+      return {
+        intent_type: 'show_budget',
+        budget_update: queriedCategory ? {
+          category_name: queriedCategory,
+          new_amount: null,
+          action: null,
+        } : undefined,
+        mentioned_goals: [],
+        mentioned_amounts: [],
+        confidence: 'high',
+        clarification_question: null,
+        user_intent_summary: queriedCategory 
+          ? `User wants to check ${queriedCategory} budget/spending`
+          : 'User wants to see their budget overview',
+      };
+    }
+    
+    // Detect transfer intent
     const transferPatterns = [
       /move\s+\$?\d+.*(?:from|to).*(?:checking|savings|investment)/i,
       /transfer\s+\$?\d+.*(?:from|to)/i,

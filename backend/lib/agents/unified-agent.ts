@@ -61,7 +61,7 @@ export class UnifiedAgent {
       throw new Error('OPENAI_API_KEY (or OPEN_AI_API_KEY) required. Get one at https://platform.openai.com/api-keys');
     }
 
-    const modelName = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+    const modelName = process.env.OPENAI_MODEL || 'o1-preview';
     
     this.model = new ChatOpenAI({
       model: modelName,

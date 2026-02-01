@@ -3,10 +3,14 @@
  * 
  * Handles executing financial actions that modify user state.
  * This includes transfers, goal creation, budget updates, etc.
+ * 
+ * IMPORTANT: All successful actions persist changes to the user state manager,
+ * making them visible across the entire application.
  */
 
 import type { UserProfile, FinancialGoal } from '../../types/financial.js';
 import { getInvestmentBalance } from '../../types/financial.js';
+import { userStateManager } from '../user-state.js';
 
 // ============================================================================
 // TYPES
@@ -94,6 +98,9 @@ export class ActionExecutor {
     // Execute the transfer
     const updatedUser = this.applyTransfer(user, fromAccount, toAccount, amount);
     
+    // PERSIST: Update the global user state
+    userStateManager.setUserState(updatedUser);
+    
     const newSourceBalance = this.getAccountBalance(updatedUser, fromAccount);
     const newDestBalance = this.getAccountBalance(updatedUser, toAccount);
     
@@ -161,6 +168,9 @@ export class ActionExecutor {
       goals: [...user.goals, newGoal],
       updatedAt: new Date(),
     };
+    
+    // PERSIST: Update the global user state
+    userStateManager.setUserState(updatedUser);
     
     return {
       success: true,
@@ -238,6 +248,9 @@ export class ActionExecutor {
       spendingCategories: updatedCategories,
       updatedAt: new Date(),
     };
+    
+    // PERSIST: Update the global user state
+    userStateManager.setUserState(updatedUser);
     
     return {
       success: true,
@@ -368,6 +381,9 @@ export class ActionExecutor {
         });
       }
     }
+    
+    // PERSIST: Update the global user state
+    userStateManager.setUserState(updatedUser);
     
     return {
       success: true,
