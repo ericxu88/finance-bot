@@ -21,24 +21,31 @@ const UnifiedAnalysisSchema = z.object({
     monthly_impact: z.string(),
     key_concern: z.string().nullable(),
   }),
-  
+
   // Investment analysis
   investment_assessment: z.object({
     appropriate_for_goal: z.boolean(),
     projected_growth: z.string(),
     risk_alignment: z.string(),
   }),
-  
+
   // Guardrail check
   guardrail_assessment: z.object({
     passes_all: z.boolean(),
     violations: z.array(z.string()),
   }),
-  
+
+  // Spending insights - NEW
+  spending_insights: z.object({
+    overspending_categories: z.array(z.string()).describe('Categories where user is over 70% of budget or overspent'),
+    opportunities_to_save: z.string().nullable().describe('Specific suggestion to reduce spending, referencing transaction data'),
+    estimated_monthly_savings: z.number().nullable().describe('Estimated monthly savings if user follows the suggestion'),
+  }),
+
   // Final recommendation
   recommendation: z.enum(['proceed', 'proceed_with_caution', 'reconsider', 'do_not_proceed']),
   confidence: z.enum(['high', 'medium', 'low']),
-  explanation: z.string(),
+  explanation: z.string().describe('Detailed explanation with specific references to spending data, transactions, or budget usage'),
   suggested_alternative: z.string().nullable(),
 });
 
@@ -80,30 +87,82 @@ export class UnifiedAgent {
 
     const { user, action, simulationResult } = context;
     const scenario = simulationResult.scenarioIfDo;
-    
-    const prompt = PromptTemplate.fromTemplate(`You are a financial advisor AI. Analyze this financial decision in ONE response.
 
-USER PROFILE:
+    // Helper to safely get investment balance
+    const getInvestmentBalance = (account: number | { balance: number }): number => {
+      return typeof account === 'number' ? account : account.balance;
+    };
+
+    // Build spending summary with transaction details
+    const spendingSummary = user.spendingCategories.map(cat => {
+      const percentUsed = cat.monthlyBudget > 0 ? (cat.currentSpent / cat.monthlyBudget * 100) : 0;
+      const status = percentUsed > 90 ? '🔴' : percentUsed > 70 ? '🟡' : '🟢';
+      const recentTxns = (cat.transactions || [])
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        .slice(0, 3);
+
+      return `${status} ${cat.name}: $${cat.currentSpent.toFixed(0)}/$${cat.monthlyBudget} (${percentUsed.toFixed(0)}% used)` +
+        (recentTxns.length > 0
+          ? `\n   Recent: ${recentTxns.map(t => `${t.description} $${Math.abs(t.amount).toFixed(0)}`).join(', ')}`
+          : '');
+    }).join('\n');
+
+    // Build goals summary
+    const goalsSummary = user.goals.map(g => {
+      const progress = (g.currentAmount / g.targetAmount * 100).toFixed(0);
+      const remaining = g.targetAmount - g.currentAmount;
+      return `• ${g.name}: $${g.currentAmount.toLocaleString()}/$${g.targetAmount.toLocaleString()} (${progress}% complete, $${remaining.toLocaleString()} to go)`;
+    }).join('\n');
+
+    // Calculate monthly surplus
+    const fixedExpensesTotal = user.fixedExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+    const budgetTotal = user.spendingCategories.reduce((sum, cat) => sum + cat.monthlyBudget, 0);
+    const monthlySurplus = user.monthlyIncome - fixedExpensesTotal - budgetTotal;
+
+    const prompt = PromptTemplate.fromTemplate(`You are a financial advisor AI. Analyze this financial decision comprehensively with ALL available user context.
+
+💰 ACCOUNTS:
 - Monthly income: $${user.monthlyIncome}
 - Checking: $${user.accounts.checking}
 - Savings: $${user.accounts.savings}
+- Investments: $${typeof user.accounts.investments === 'object' && user.accounts.investments?.taxable ? getInvestmentBalance(user.accounts.investments.taxable) : 0} (taxable)
+- Monthly surplus: $${monthlySurplus.toFixed(0)} (after fixed expenses + budgets)
+
+💳 SPENDING ANALYSIS (this month):
+${spendingSummary}
+
+📊 FIXED EXPENSES (monthly):
+${user.fixedExpenses.map(e => `- ${e.name}: $${e.amount}`).join('\n')}
+
+🎯 FINANCIAL GOALS:
+${goalsSummary}
+
+⚙️ PREFERENCES:
 - Risk tolerance: ${user.preferences.riskTolerance}
 - Liquidity preference: ${user.preferences.liquidityPreference}
 
-PROPOSED ACTION:
+🔍 PROPOSED ACTION:
 - Type: ${action.type}
 - Amount: $${action.amount}
 ${action.goalId ? `- For goal: ${user.goals.find(g => g.id === action.goalId)?.name}` : ''}
 
-SIMULATION RESULTS:
+📈 SIMULATION RESULTS:
 - Checking after: $${scenario.accountsAfter.checking}
 - Savings after: $${scenario.accountsAfter.savings}
 - Goal impacts: ${scenario.goalImpacts.map(g => `${g.goalName}: +${g.progressChangePct}%`).join(', ')}
 
-GUARDRAILS TO CHECK:
+🛡️ GUARDRAILS:
 ${user.preferences.guardrails.map(g => `- ${g.rule}`).join('\n')}
 
-Analyze this from budgeting, investment, and guardrail perspectives. Be concise.
+INSTRUCTIONS:
+Analyze this decision using ALL context above. Look for:
+1. Budget impact: Is any category overspent? Can they afford this?
+2. Spending patterns: Are there categories where spending could be reduced?
+3. Goal alignment: Does this help or hurt their financial goals?
+4. Evidence-based advice: Reference specific transactions/spending when making recommendations
+5. Alternative suggestions: If you see overspending in one area, suggest reallocating that money
+
+Be specific and reference actual data (transactions, budget percentages, goal progress).
 
 {format_instructions}
 
@@ -140,12 +199,17 @@ Return ONLY the JSON object.`);
  */
 export class MockUnifiedAgent {
   async analyze(context: UnifiedAgentContext): Promise<UnifiedAnalysis> {
-    const { action, simulationResult } = context;
+    const { user, action, simulationResult } = context;
     const scenario = simulationResult.scenarioIfDo;
-    
+
     const checkingLow = scenario.accountsAfter.checking < 1000;
     const isInvest = action.type === 'invest';
-    
+
+    // Find overspending categories
+    const overspendingCategories = user.spendingCategories
+      .filter(cat => cat.monthlyBudget > 0 && (cat.currentSpent / cat.monthlyBudget) > 0.7)
+      .map(cat => cat.name);
+
     return {
       budget_assessment: {
         can_afford: !checkingLow,
@@ -160,6 +224,13 @@ export class MockUnifiedAgent {
       guardrail_assessment: {
         passes_all: !checkingLow,
         violations: checkingLow ? ['Minimum checking balance violated'] : [],
+      },
+      spending_insights: {
+        overspending_categories: overspendingCategories,
+        opportunities_to_save: overspendingCategories.length > 0
+          ? `You're spending heavily on ${overspendingCategories[0]}. Consider reducing by $50/month.`
+          : null,
+        estimated_monthly_savings: overspendingCategories.length > 0 ? 50 : null,
       },
       recommendation: checkingLow ? 'do_not_proceed' : isInvest ? 'proceed' : 'proceed_with_caution',
       confidence: checkingLow ? 'high' : 'medium',

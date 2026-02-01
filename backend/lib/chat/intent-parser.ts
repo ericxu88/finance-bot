@@ -45,36 +45,36 @@ export const ParsedIntentSchema = z.object({
     account_type: z.string().nullable(),     // "checking", "savings", "roth", etc.
     category: z.string().nullable(),         // For spend actions
     time_horizon: z.number().nullable(),     // Years for investment
-  }).optional(),
-  
+  }).nullish(),
+
   // For compare_options intent
   options_to_compare: z.array(z.object({
     type: z.enum(['save', 'invest', 'spend']),
     amount: z.number(),
     description: z.string(),
-  })).optional(),
-  
+  })).nullish(),
+
   // NEW: For transfer_money intent
   transfer: z.object({
     from_account: z.string().nullable(),     // "checking", "savings", etc.
     to_account: z.string().nullable(),       // "checking", "savings", "investment", etc.
     amount: z.number().nullable(),
-  }).optional(),
-  
+  }).nullish(),
+
   // NEW: For create_goal intent
   new_goal: z.object({
     name: z.string().nullable(),
     target_amount: z.number().nullable(),
     deadline_months: z.number().nullable(),  // Months from now
     priority: z.number().nullable(),         // 1-10
-  }).optional(),
-  
+  }).nullish(),
+
   // NEW: For update_budget intent
   budget_update: z.object({
     category_name: z.string().nullable(),
     new_amount: z.number().nullable(),
     action: z.enum(['increase', 'decrease', 'set']).nullable(),
-  }).optional(),
+  }).nullish(),
   
   // Extracted entities
   mentioned_goals: z.array(z.string()),      // Goals mentioned in message

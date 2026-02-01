@@ -20,10 +20,10 @@
         </div>
 
         <nav class="main-nav">
-          <a href="#accounts" class="nav-link active">Accounts</a>
-          <a href="#activity" class="nav-link">Activity</a>
-          <a href="#goals" class="nav-link">Goals</a>
-          <a href="#budget" class="nav-link">Budget</a>
+          <a href="#accounts" class="nav-link active" onclick="switchView('accounts'); return false;">Accounts</a>
+          <a href="#activity" class="nav-link" onclick="switchView('activity'); return false;">Activity</a>
+          <a href="#goals" class="nav-link" onclick="switchView('goals'); return false;">Goals</a>
+          <a href="#budget" class="nav-link" onclick="switchView('budget'); return false;">Budget</a>
         </nav>
 
         <div class="header-actions">
@@ -40,183 +40,240 @@
 
     <!-- Main Banking Dashboard -->
     <main class="bank-main">
-      <div class="dashboard-container">
 
-        <!-- Welcome Section -->
-        <section class="welcome-section">
-          <div class="welcome-content">
-            <h1 class="welcome-title">Good morning, Sarah</h1>
-            <p class="welcome-subtitle">Here's your financial overview</p>
-          </div>
-          <div class="welcome-actions">
-            <button class="btn-transfer" onclick="showTransferModal()">
-              <span class="btn-icon">⇄</span>
-              Transfer Money
-            </button>
-            <button class="btn-icon-only" onclick="refreshDashboard()" title="Refresh">
-              <span>↻</span>
-            </button>
-          </div>
-        </section>
-
-        <!-- Accounts Section -->
-        <section class="accounts-section" id="accounts">
-          <h2 class="section-title">Accounts</h2>
-
-          <div class="accounts-grid">
-            <!-- Checking Account -->
-            <div class="account-card checking-account">
-              <div class="account-header">
-                <div>
-                  <span class="account-type">Checking</span>
-                  <span class="account-number">...1234</span>
-                </div>
-                <span class="account-icon">💳</span>
-              </div>
-              <div class="account-balance">
-                <span class="balance-amount" id="checking-balance">$3,000.00</span>
-                <span class="balance-label">Available Balance</span>
-              </div>
-              <div class="account-footer">
-                <button class="account-action" onclick="quickTransfer('checking')">Transfer</button>
-                <button class="account-action" onclick="viewDetails('checking')">Details</button>
-              </div>
+      <!-- Dashboard/Accounts View -->
+      <div class="view active" id="view-accounts">
+        <div class="dashboard-container">
+          <!-- Welcome Section -->
+          <section class="welcome-section">
+            <div class="welcome-content">
+              <h1 class="welcome-title">Good morning, Sarah</h1>
+              <p class="welcome-subtitle">Here's your financial overview</p>
             </div>
-
-            <!-- Savings Account -->
-            <div class="account-card savings-account">
-              <div class="account-header">
-                <div>
-                  <span class="account-type">Savings</span>
-                  <span class="account-number">...5678</span>
-                </div>
-                <span class="account-icon">🏦</span>
-              </div>
-              <div class="account-balance">
-                <span class="balance-amount" id="savings-balance">$8,000.00</span>
-                <span class="balance-label">Available Balance</span>
-              </div>
-              <div class="account-footer">
-                <button class="account-action" onclick="quickTransfer('savings')">Transfer</button>
-                <button class="account-action" onclick="viewDetails('savings')">Details</button>
-              </div>
+            <div class="welcome-actions">
+              <button class="btn-transfer" onclick="showTransferModal()">
+                <span class="btn-icon">⇄</span>
+                Transfer Money
+              </button>
+              <button class="btn-icon-only" onclick="refreshAccounts()" title="Refresh">
+                <span>↻</span>
+              </button>
             </div>
+          </section>
 
-            <!-- Investment Account -->
-            <div class="account-card investment-account">
-              <div class="account-header">
-                <div>
-                  <span class="account-type">Investment</span>
-                  <span class="account-number">...9012</span>
+          <!-- Accounts Section -->
+          <section class="accounts-section">
+            <h2 class="section-title">Accounts</h2>
+
+            <div class="accounts-grid">
+              <!-- Checking Account -->
+              <div class="account-card checking-account">
+                <div class="account-header">
+                  <div>
+                    <span class="account-type">Checking</span>
+                    <span class="account-number">...1234</span>
+                  </div>
+                  <span class="account-icon">💳</span>
                 </div>
-                <span class="account-icon">📈</span>
-              </div>
-              <div class="account-balance">
-                <span class="balance-amount" id="investments-balance">$5,000.00</span>
-                <span class="balance-label">Total Value</span>
-              </div>
-              <div class="account-footer">
-                <button class="account-action" onclick="quickTransfer('investment')">Add Funds</button>
-                <button class="account-action" onclick="viewDetails('investment')">Details</button>
-              </div>
-            </div>
-
-            <!-- Total Assets Card -->
-            <div class="account-card total-assets-card">
-              <div class="account-header">
-                <span class="account-type">Total Assets</span>
-                <span class="account-badge positive">+2.3%</span>
-              </div>
-              <div class="account-balance">
-                <span class="balance-amount large" id="total-assets">$16,000.00</span>
-                <span class="balance-label">Combined Balance</span>
-              </div>
-              <div class="assets-chart">
-                <div class="chart-bar checking" style="width: 18.75%" title="Checking: 18.75%"></div>
-                <div class="chart-bar savings" style="width: 50%" title="Savings: 50%"></div>
-                <div class="chart-bar investment" style="width: 31.25%" title="Investment: 31.25%"></div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- Financial Goals Section -->
-        <section class="goals-section" id="goals">
-          <div class="section-header">
-            <h2 class="section-title">Financial Goals</h2>
-            <button class="btn-text" onclick="showAddGoalModal()">
-              <span>+</span> Add Goal
-            </button>
-          </div>
-
-          <div class="goals-grid" id="goals-list">
-            <!-- Populated by JavaScript -->
-          </div>
-        </section>
-
-        <!-- Budget Overview Section -->
-        <section class="budget-section" id="budget">
-          <div class="section-header">
-            <h2 class="section-title">Budget This Month</h2>
-            <a href="#" class="btn-text" onclick="switchView('budget')">View All →</a>
-          </div>
-
-          <div class="budget-overview">
-            <div class="budget-summary-card">
-              <div class="budget-ring-container">
-                <svg class="budget-ring" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="40" class="ring-bg"/>
-                  <circle cx="50" cy="50" r="40" class="ring-progress" id="budget-progress"/>
-                </svg>
-                <div class="ring-center">
-                  <span class="ring-value" id="budget-percent">0%</span>
-                  <span class="ring-label">spent</span>
+                <div class="account-balance">
+                  <span class="balance-amount" id="checking-balance">$3,000.00</span>
+                  <span class="balance-label">Available Balance</span>
+                </div>
+                <div class="account-footer">
+                  <button class="account-action" onclick="quickTransfer('checking')">Transfer</button>
+                  <button class="account-action" onclick="viewDetails('checking')">Details</button>
                 </div>
               </div>
-              <div class="budget-info">
-                <div class="budget-stat">
-                  <span class="stat-label">Spent</span>
-                  <span class="stat-value" id="budget-spent">$0</span>
+
+              <!-- Savings Account -->
+              <div class="account-card savings-account">
+                <div class="account-header">
+                  <div>
+                    <span class="account-type">Savings</span>
+                    <span class="account-number">...5678</span>
+                  </div>
+                  <span class="account-icon">🏦</span>
                 </div>
-                <div class="budget-stat">
-                  <span class="stat-label">Budget</span>
-                  <span class="stat-value" id="budget-total">$750</span>
+                <div class="account-balance">
+                  <span class="balance-amount" id="savings-balance">$8,000.00</span>
+                  <span class="balance-label">Available Balance</span>
                 </div>
-                <div class="budget-stat">
-                  <span class="stat-label">Remaining</span>
-                  <span class="stat-value positive" id="budget-remaining">$750</span>
+                <div class="account-footer">
+                  <button class="account-action" onclick="quickTransfer('savings')">Transfer</button>
+                  <button class="account-action" onclick="viewDetails('savings')">Details</button>
+                </div>
+              </div>
+
+              <!-- Investment Account -->
+              <div class="account-card investment-account">
+                <div class="account-header">
+                  <div>
+                    <span class="account-type">Investment</span>
+                    <span class="account-number">...9012</span>
+                  </div>
+                  <span class="account-icon">📈</span>
+                </div>
+                <div class="account-balance">
+                  <span class="balance-amount" id="investments-balance">$5,000.00</span>
+                  <span class="balance-label">Total Value</span>
+                </div>
+                <div class="account-footer">
+                  <button class="account-action" onclick="quickTransfer('investment')">Add Funds</button>
+                  <button class="account-action" onclick="viewDetails('investment')">Details</button>
+                </div>
+              </div>
+
+              <!-- Total Assets Card -->
+              <div class="account-card total-assets-card">
+                <div class="account-header">
+                  <span class="account-type">Total Assets</span>
+                  <span class="account-badge positive">+2.3%</span>
+                </div>
+                <div class="account-balance">
+                  <span class="balance-amount large" id="total-assets">$16,000.00</span>
+                  <span class="balance-label">Combined Balance</span>
+                </div>
+                <div class="assets-chart">
+                  <div class="chart-bar checking" style="width: 18.75%" title="Checking: 18.75%"></div>
+                  <div class="chart-bar savings" style="width: 50%" title="Savings: 50%"></div>
+                  <div class="chart-bar investment" style="width: 31.25%" title="Investment: 31.25%"></div>
                 </div>
               </div>
             </div>
+          </section>
 
-            <div class="budget-categories-preview" id="budget-categories-preview">
-              <!-- Top 3 categories populated by JS -->
+          <!-- Quick Insights Section -->
+          <section class="insights-section">
+            <div class="insight-card" id="monthly-surplus-card">
+              <div class="insight-icon">💰</div>
+              <div class="insight-content">
+                <span class="insight-label">Monthly Surplus</span>
+                <span class="insight-value" id="monthly-surplus">$2,250</span>
+                <span class="insight-description">Available after expenses</span>
+              </div>
             </div>
-          </div>
-        </section>
 
-        <!-- Quick Insights Section -->
-        <section class="insights-section">
-          <div class="insight-card" id="monthly-surplus-card">
-            <div class="insight-icon">💰</div>
-            <div class="insight-content">
-              <span class="insight-label">Monthly Surplus</span>
-              <span class="insight-value" id="monthly-surplus">$2,250</span>
-              <span class="insight-description">Available after expenses</span>
+            <div class="insight-card" id="investment-reminder-card">
+              <div class="insight-icon">💡</div>
+              <div class="insight-content">
+                <span class="insight-label">Smart Suggestion</span>
+                <p class="insight-message" id="reminder-message">Loading...</p>
+                <button class="btn-link" onclick="openAdvisor()">Ask Advisor →</button>
+              </div>
             </div>
-          </div>
-
-          <div class="insight-card" id="investment-reminder-card">
-            <div class="insight-icon">💡</div>
-            <div class="insight-content">
-              <span class="insight-label">Smart Suggestion</span>
-              <p class="insight-message" id="reminder-message">Loading...</p>
-              <button class="btn-link" onclick="openAdvisor()">Ask Advisor →</button>
-            </div>
-          </div>
-        </section>
-
+          </section>
+        </div>
       </div>
+
+      <!-- Activity View -->
+      <div class="view" id="view-activity">
+        <div class="dashboard-container">
+          <section class="page-header">
+            <h1 class="page-title">Activity</h1>
+            <p class="page-subtitle">Recent transactions and account activity</p>
+          </section>
+
+          <section class="activity-section">
+            <div class="activity-filters">
+              <button class="filter-btn active">All</button>
+              <button class="filter-btn">Checking</button>
+              <button class="filter-btn">Savings</button>
+              <button class="filter-btn">Investment</button>
+            </div>
+
+            <div class="activity-list" id="activity-list">
+              <!-- Populated by JavaScript -->
+              <div class="empty-state">
+                <div class="empty-icon">📊</div>
+                <p>No recent activity</p>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <!-- Goals View -->
+      <div class="view" id="view-goals">
+        <div class="dashboard-container">
+          <section class="page-header">
+            <div>
+              <h1 class="page-title">Financial Goals</h1>
+              <p class="page-subtitle">Track and manage your savings goals</p>
+            </div>
+            <button class="btn-primary" onclick="askAdvisorToCreateGoal()">
+              <span>💬</span> Ask Advisor to Create Goal
+            </button>
+          </section>
+
+          <section class="goals-section">
+            <div class="goals-grid" id="goals-list">
+              <!-- Populated by JavaScript -->
+            </div>
+          </section>
+
+          <!-- Goals Progress Chart -->
+          <section class="chart-section">
+            <h2 class="section-title">Goals Progress Over Time</h2>
+            <div class="chart-container">
+              <canvas id="goals-progress-chart"></canvas>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <!-- Budget View -->
+      <div class="view" id="view-budget">
+        <div class="dashboard-container">
+          <section class="page-header">
+            <h1 class="page-title">Budget This Month</h1>
+            <p class="page-subtitle">Track your spending across categories</p>
+          </section>
+
+          <section class="budget-section">
+            <div class="budget-overview">
+              <div class="budget-summary-card">
+                <div class="budget-ring-container">
+                  <svg class="budget-ring" viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="40" class="ring-bg"/>
+                    <circle cx="50" cy="50" r="40" class="ring-progress" id="budget-progress"/>
+                  </svg>
+                  <div class="ring-center">
+                    <span class="ring-value" id="budget-percent">0%</span>
+                    <span class="ring-label">spent</span>
+                  </div>
+                </div>
+                <div class="budget-info">
+                  <div class="budget-stat">
+                    <span class="stat-label">Spent</span>
+                    <span class="stat-value" id="budget-spent">$0</span>
+                  </div>
+                  <div class="budget-stat">
+                    <span class="stat-label">Budget</span>
+                    <span class="stat-value" id="budget-total">$750</span>
+                  </div>
+                  <div class="budget-stat">
+                    <span class="stat-label">Remaining</span>
+                    <span class="stat-value positive" id="budget-remaining">$750</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="budget-categories" id="budget-categories">
+              <!-- All categories populated by JS -->
+            </div>
+          </section>
+
+          <!-- Spending Trends Chart -->
+          <section class="chart-section">
+            <h2 class="section-title">Spending Trends</h2>
+            <div class="chart-container">
+              <canvas id="spending-chart"></canvas>
+            </div>
+          </section>
+        </div>
+      </div>
+
     </main>
 
     <!-- Floating Advisor Widget Button -->
@@ -347,6 +404,8 @@
 
   </div>
 
+  <!-- Chart.js for data visualization -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

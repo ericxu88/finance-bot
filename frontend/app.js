@@ -2,16 +2,16 @@
  * Compass — Financial Intelligence Frontend
  * API integration and UI logic
  *
- * Version: 3.3 - SYNTAX FIX (Feb 1, 2026)
- * - FIXED: Syntax error from incomplete ternary operator
- * - FIXED: Removed non-existent /goals/summary/sample endpoint
- * - FIXED: Chat and dashboard now use same user profile
- * - User profile persists after transfers/actions
- * - Dashboard updates dynamically with real balances
- * - Goals loaded directly from user profile
+ * Version: 4.1 - TABBED VIEWS + CHARTS (Feb 1, 2026)
+ * - NEW: Separate tabbed views (Accounts, Activity, Goals, Budget)
+ * - NEW: Data visualization charts (Goals progress, Spending trends)
+ * - NEW: Goal creation through LLM agent
+ * - NEW: Activity/transaction history view
+ * - User profile persists across all views
+ * - Charts update dynamically with user data
  */
 
-console.log('💰 Finance Bot v3.3 loaded - Ready to roll! 🚀');
+console.log('💰 Finance Bot v4.1 loaded - Tabbed navigation with charts! 📊');
 
 // ============================================================================
 // CONFIGURATION
@@ -200,37 +200,37 @@ function validateMessage(message) {
 // ============================================================================
 
 function switchView(viewName) {
-  // Update nav
-  document.querySelectorAll('.nav-item').forEach(item => {
-    item.classList.toggle('active', item.dataset.view === viewName);
+  // Update nav links
+  document.querySelectorAll('.nav-link').forEach(link => {
+    link.classList.remove('active');
   });
-  
+
+  const activeLink = document.querySelector(`.nav-link[href="#${viewName}"]`);
+  if (activeLink) {
+    activeLink.classList.add('active');
+  }
+
   // Update views
   document.querySelectorAll('.view').forEach(view => {
-    view.classList.toggle('active', view.id === `view-${viewName}`);
+    view.classList.remove('active');
   });
-  
+
+  const targetView = document.getElementById(`view-${viewName}`);
+  if (targetView) {
+    targetView.classList.add('active');
+  }
+
   // Load data for specific views
-  if (viewName === 'dashboard') {
-    loadDashboard();
+  if (viewName === 'accounts') {
+    refreshAccounts();
   } else if (viewName === 'goals') {
     loadGoals();
   } else if (viewName === 'budget') {
     loadBudget();
-  } else if (viewName === 'compare') {
-    // Reset comparison view state
-    document.getElementById('compare-results').style.display = 'none';
-    document.getElementById('compare-loading').style.display = 'none';
+  } else if (viewName === 'activity') {
+    loadActivity();
   }
 }
-
-// Set up nav click handlers
-document.querySelectorAll('.nav-item').forEach(item => {
-  item.addEventListener('click', (e) => {
-    e.preventDefault();
-    switchView(item.dataset.view);
-  });
-});
 
 // ============================================================================
 // API HELPERS
@@ -258,8 +258,85 @@ async function fetchAPI(endpoint, options = {}) {
 }
 
 // ============================================================================
-// DASHBOARD
+// DASHBOARD / ACCOUNTS VIEW
 // ============================================================================
+
+async function refreshAccounts() {
+  // Refresh account balances and insights
+  if (!currentUserProfile) {
+    await fetchUserProfile();
+  }
+  updateAssetsDisplay();
+
+  // Update monthly surplus
+  const totalExpenses = currentUserProfile.fixedExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+  const totalSpending = currentUserProfile.spendingCategories.reduce((sum, cat) => sum + cat.currentSpent, 0);
+  const surplus = currentUserProfile.monthlyIncome - totalExpenses - totalSpending;
+
+  const surplusEl = document.getElementById('monthly-surplus');
+  if (surplusEl) {
+    surplusEl.textContent = `$${surplus.toLocaleString()}`;
+  }
+}
+
+async function loadActivity() {
+  // Load recent transactions from all spending categories
+  if (!currentUserProfile) {
+    await fetchUserProfile();
+  }
+
+  const activityList = document.getElementById('activity-list');
+  if (!activityList) return;
+
+  // Collect all transactions from all categories
+  const allTransactions = [];
+  currentUserProfile.spendingCategories.forEach(category => {
+    if (category.transactions) {
+      category.transactions.forEach(txn => {
+        allTransactions.push({
+          ...txn,
+          categoryName: category.name,
+        });
+      });
+    }
+  });
+
+  // Sort by date (newest first)
+  allTransactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  if (allTransactions.length === 0) {
+    activityList.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">📊</div>
+        <p>No recent activity</p>
+      </div>
+    `;
+    return;
+  }
+
+  // Display transactions
+  activityList.innerHTML = allTransactions.map(txn => {
+    const date = new Date(txn.date);
+    const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const amount = Math.abs(txn.amount);
+
+    return `
+      <div class="activity-item">
+        <div class="activity-icon">${txn.type === 'expense' ? '💳' : '💰'}</div>
+        <div class="activity-details">
+          <div class="activity-description">${txn.description}</div>
+          <div class="activity-category">${txn.categoryName}</div>
+        </div>
+        <div class="activity-right">
+          <div class="activity-amount ${txn.type === 'expense' ? 'negative' : 'positive'}">
+            ${txn.type === 'expense' ? '-' : '+'}$${amount.toFixed(2)}
+          </div>
+          <div class="activity-date">${formattedDate}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
 
 async function loadDashboard() {
   try {
@@ -337,13 +414,7 @@ async function loadDashboard() {
       }
     });
 
-    const allGoals = Array.from(goalsMap.values());
-    updateGoalsList(allGoals);
-    
-    // Update budget ring
-    updateBudgetRing(budgetAnalysis);
-    
-    // Update reminder
+    // Update reminder (only element on Accounts view from API)
     updateReminder(reminder);
     
   } catch (error) {
@@ -449,22 +520,20 @@ function updateBudgetRing(response) {
     progressRing.style.strokeDashoffset = offset;
   }
   
-  // Update text
-  document.getElementById('budget-percent').textContent = `${Math.round(percentUsed)}%`;
-  document.getElementById('budget-spent').textContent = formatCurrency(totalSpent);
-  document.getElementById('budget-total').textContent = formatCurrency(totalBudget);
-  
-  // Update badge
-  const badge = document.getElementById('budget-badge');
-  if (percentUsed > 100) {
-    badge.textContent = 'Over Budget';
-    badge.className = 'card-badge negative';
-  } else if (percentUsed > 80) {
-    badge.textContent = 'Warning';
-    badge.className = 'card-badge warning';
-  } else {
-    badge.textContent = 'On Track';
-    badge.className = 'card-badge positive';
+  // Update text (check if elements exist)
+  const percentEl = document.getElementById('budget-percent');
+  if (percentEl) percentEl.textContent = `${Math.round(percentUsed)}%`;
+
+  const spentEl = document.getElementById('budget-spent');
+  if (spentEl) spentEl.textContent = formatCurrency(totalSpent);
+
+  const totalEl = document.getElementById('budget-total');
+  if (totalEl) totalEl.textContent = formatCurrency(totalBudget);
+
+  const remaining = Math.max(0, totalBudget - totalSpent);
+  const remainingEl = document.getElementById('budget-remaining');
+  if (remainingEl) {
+    remainingEl.textContent = formatCurrency(remaining);
   }
 }
 
@@ -493,7 +562,7 @@ async function loadGoals() {
       await fetchUserProfile();
     }
 
-    const container = document.getElementById('goals-detail-list');
+    const container = document.getElementById('goals-list');
 
     // Get goals from user profile
     const profileGoalSummaries = currentUserProfile ? currentUserProfile.goals.map(g => {
@@ -613,7 +682,10 @@ async function loadGoals() {
         </div>
       `;
     }).join('');
-    
+
+    // Initialize goals progress chart
+    initializeGoalsChart(allGoals);
+
   } catch (error) {
     console.error('Failed to load goals:', error);
   }
@@ -645,63 +717,73 @@ function formatStatus(status) {
 
 async function loadBudget() {
   try {
-    const response = await fetchAPI('/budget/analysis/sample');
+    // Use user profile spending categories if available
+    if (!currentUserProfile) {
+      await fetchUserProfile();
+    }
+
     const container = document.getElementById('budget-categories');
-    
-    // Backend returns { analysis: { categories: [...], ... }, message: "...", metadata: {...} }
-    const categories = response.analysis?.categories || [];
-    
-    if (categories.length === 0) {
+
+    // Get categories from user profile
+    const spendingCategories = currentUserProfile?.spendingCategories || [];
+
+    if (spendingCategories.length === 0) {
       container.innerHTML = '<p>No budget categories found</p>';
       return;
     }
-    
+
+    // Transform to match expected format
+    const categories = spendingCategories.map(cat => {
+      const percentUsed = cat.monthlyBudget > 0 ? (cat.currentSpent / cat.monthlyBudget) * 100 : 0;
+      let status = 'good';
+      if (percentUsed > 100) status = 'over';
+      else if (percentUsed > 80) status = 'warning';
+
+      return {
+        name: cat.name,
+        monthlyBudget: cat.monthlyBudget,
+        currentSpent: cat.currentSpent,
+        percentUsed: percentUsed,
+        status: status,
+      };
+    });
+
     container.innerHTML = categories.map(cat => {
       const percent = Math.min(100, cat.percentUsed);
       const escapedName = escapeHtml(cat.name);
       const remaining = cat.monthlyBudget - cat.currentSpent;
       
+      const progressClass = cat.status === 'over' ? 'danger' : cat.status === 'warning' ? 'warning' : '';
+
       return `
-        <div class="budget-card">
-          <div class="budget-card-header">
-            <h3 class="budget-card-title">${escapedName}</h3>
-            <span class="card-badge ${getStatusClass(cat.status === 'over' ? 'at_risk' : cat.status === 'warning' ? 'behind' : 'on_track')}">
-              ${cat.status === 'over' ? 'Over' : cat.status === 'warning' ? 'Warning' : 'Good'}
+        <div class="budget-category-item">
+          <div class="category-header">
+            <span class="category-name">${escapedName}</span>
+            <span class="category-amounts">
+              ${formatCurrency(cat.currentSpent)} / ${formatCurrency(cat.monthlyBudget)}
             </span>
           </div>
-          
-          <div class="budget-card-bar">
-            <div class="budget-card-fill ${cat.status}" style="width: ${percent}%"></div>
+          <div class="category-progress">
+            <div class="category-progress-bar ${progressClass}" style="width: ${percent}%"></div>
           </div>
-          
-          <div class="budget-card-amounts">
-            <span>${formatCurrency(cat.currentSpent)} spent</span>
-            <span>${formatCurrency(Math.max(0, remaining))} left</span>
-          </div>
-          
-          ${cat.subcategories && cat.subcategories.length > 0 ? `
-            <div class="budget-subcategories">
-              ${cat.subcategories.map(sub => `
-                <div class="budget-subcategory">
-                  <span>${escapeHtml(sub.name)}</span>
-                  <div class="budget-subcategory-bar">
-                    <div class="budget-subcategory-fill" style="width: ${Math.min(100, sub.percentUsed)}%"></div>
-                  </div>
-                  <span>${formatCurrency(sub.currentSpent)}</span>
-                </div>
-              `).join('')}
-            </div>
-          ` : ''}
         </div>
       `;
     }).join('');
-    
+
+    // Update budget ring with totals
+    const totalBudget = categories.reduce((sum, cat) => sum + cat.monthlyBudget, 0);
+    const totalSpent = categories.reduce((sum, cat) => sum + cat.currentSpent, 0);
+    updateBudgetRing({ analysis: { totalBudget, totalSpent } });
+
+    // Initialize spending chart
+    initializeSpendingChart(categories);
+
     // Also load underspending and upcoming expenses data
     await Promise.all([
       loadUnderspending(),
       loadUpcomingExpenses(),
     ]);
-    
+
   } catch (error) {
     console.error('Failed to load budget:', error);
   }
@@ -1655,6 +1737,163 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ============================================================================
+// CHART INITIALIZATION
+// ============================================================================
+
+let goalsChart = null;
+let spendingChart = null;
+
+/**
+ * Initialize goals progress chart
+ */
+function initializeGoalsChart(goals) {
+  const canvas = document.getElementById('goals-progress-chart');
+  if (!canvas) return;
+
+  const ctx = canvas.getContext('2d');
+
+  // Destroy existing chart if it exists
+  if (goalsChart) {
+    goalsChart.destroy();
+  }
+
+  // Prepare data
+  const labels = goals.map(g => g.goalName);
+  const current = goals.map(g => g.currentAmount);
+  const target = goals.map(g => g.targetAmount);
+
+  goalsChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Current Amount',
+          data: current,
+          backgroundColor: 'rgba(0, 102, 204, 0.8)',
+          borderColor: 'rgba(0, 102, 204, 1)',
+          borderWidth: 1,
+        },
+        {
+          label: 'Target Amount',
+          data: target,
+          backgroundColor: 'rgba(229, 231, 235, 0.5)',
+          borderColor: 'rgba(229, 231, 235, 1)',
+          borderWidth: 1,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: true,
+          position: 'top',
+        },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              return context.dataset.label + ': $' + context.parsed.y.toLocaleString();
+            },
+          },
+        },
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: {
+            callback: function(value) {
+              return '$' + value.toLocaleString();
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+/**
+ * Initialize spending trends chart
+ */
+function initializeSpendingChart(categories) {
+  const canvas = document.getElementById('spending-chart');
+  if (!canvas) return;
+
+  const ctx = canvas.getContext('2d');
+
+  // Destroy existing chart if it exists
+  if (spendingChart) {
+    spendingChart.destroy();
+  }
+
+  // Prepare data
+  const labels = categories.map(c => c.name);
+  const spent = categories.map(c => c.currentSpent);
+  const budget = categories.map(c => c.monthlyBudget);
+
+  // Color categories based on status
+  const backgroundColors = categories.map(c => {
+    const percent = (c.currentSpent / c.monthlyBudget) * 100;
+    if (percent > 100) return 'rgba(239, 68, 68, 0.8)'; // danger
+    if (percent > 80) return 'rgba(245, 158, 11, 0.8)'; // warning
+    return 'rgba(34, 197, 94, 0.8)'; // success
+  });
+
+  spendingChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Spent',
+          data: spent,
+          backgroundColor: backgroundColors,
+          borderWidth: 0,
+        },
+        {
+          label: 'Budget',
+          data: budget,
+          backgroundColor: 'rgba(229, 231, 235, 0.5)',
+          borderColor: 'rgba(229, 231, 235, 1)',
+          borderWidth: 1,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: true,
+          position: 'top',
+        },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              const value = context.parsed.y;
+              const total = categories[context.dataIndex].monthlyBudget;
+              const percent = ((value / total) * 100).toFixed(1);
+              return context.dataset.label + ': $' + value.toFixed(2) + ' (' + percent + '%)';
+            },
+          },
+        },
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: {
+            callback: function(value) {
+              return '$' + value.toLocaleString();
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+// ============================================================================
 // ADVISOR WIDGET FUNCTIONS
 // ============================================================================
 
@@ -1711,6 +1950,13 @@ function hideTransferModal() {
 }
 
 /**
+ * Ask advisor to help create a goal
+ */
+function askAdvisorToCreateGoal() {
+  openAdvisor('I want to create a new savings goal. Can you help me set it up?');
+}
+
+/**
  * Quick transfer action
  */
 function quickTransfer(accountType) {
@@ -1724,21 +1970,14 @@ function viewDetails(accountType) {
   openAdvisor(`show me details for my ${accountType} account`);
 }
 
-/**
- * Simplified view switcher (for backward compatibility)
- */
-function switchView(viewName) {
-  if (viewName === 'chat') {
-    openAdvisor();
-  } else {
-    // Scroll to section
-    const section = document.getElementById(viewName);
-    if (section) {
-      section.scrollIntoView({ behavior: 'smooth' });
-    }
-  }
-}
+// Initialize page - load accounts view on startup
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('💰 Finance Bot v4.1 - Initializing...');
 
-// Update version
-console.log('💰 Finance Bot v4.0 loaded - Modern Banking Dashboard! 🏦');
+  // Load user profile
+  fetchUserProfile().then(() => {
+    // Load the initial accounts view
+    refreshAccounts();
+  });
+});
 

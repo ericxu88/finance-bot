@@ -453,7 +453,66 @@ export class ChatHandler {
 
   private async handleGetRecommendation(userProfile: UserProfile): Promise<FormattedResponse> {
     const healthAnalysis = analyzeFinancialHealth(userProfile);
-    return formatRecommendationResponse(healthAnalysis.recommendations, userProfile);
+
+    // Add spending insights to recommendations
+    let enhancedMessage = formatRecommendationResponse(healthAnalysis.recommendations, userProfile).message;
+
+    // Analyze spending patterns and add specific advice
+    const categoriesWithSpending = userProfile.spendingCategories
+      .filter(cat => cat.currentSpent > 0)
+      .map(cat => ({
+        ...cat,
+        percentUsed: cat.monthlyBudget > 0 ? (cat.currentSpent / cat.monthlyBudget * 100) : 0,
+        overspent: cat.currentSpent > cat.monthlyBudget,
+      }))
+      .sort((a, b) => b.percentUsed - a.percentUsed);
+
+    // Find opportunities to save
+    const highSpendingCategories = categoriesWithSpending.filter(cat => cat.percentUsed > 70);
+
+    if (highSpendingCategories.length > 0) {
+      enhancedMessage += `\n\n**💡 How to save $700/month:**\n`;
+      enhancedMessage += `Based on your spending patterns, here are specific ways to reach your savings goal:\n\n`;
+
+      let totalSavingsOpportunity = 0;
+      highSpendingCategories.slice(0, 3).forEach(cat => {
+        const emoji = cat.overspent ? '🔴' : cat.percentUsed > 80 ? '🟡' : '🟢';
+        const potentialSavings = Math.min(Math.round(cat.currentSpent * 0.25), cat.currentSpent - cat.monthlyBudget + 50);
+        totalSavingsOpportunity += potentialSavings;
+
+        enhancedMessage += `${emoji} **${cat.name}:** Currently $${cat.currentSpent.toFixed(0)}/$${cat.monthlyBudget} (${cat.percentUsed.toFixed(0)}% used)\n`;
+
+        // Show specific transactions
+        const recentTxns = (cat.transactions || [])
+          .filter(t => t.type === 'expense')
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+          .slice(0, 2);
+
+        if (recentTxns.length > 0) {
+          enhancedMessage += `   Recent: ${recentTxns.map(t => `${t.description} ($${Math.abs(t.amount).toFixed(0)})`).join(', ')}\n`;
+        }
+
+        enhancedMessage += `   💰 **Savings opportunity:** Reduce by $${potentialSavings}/month\n\n`;
+      });
+
+      if (totalSavingsOpportunity >= 500) {
+        enhancedMessage += `✅ By making these adjustments, you could save **$${totalSavingsOpportunity}/month** toward your Emergency Fund goal!\n`;
+      } else {
+        enhancedMessage += `By reducing spending in these areas plus your monthly surplus, you can reach your $700/month savings target.\n`;
+      }
+    }
+
+    return {
+      message: enhancedMessage,
+      summary: formatRecommendationResponse(healthAnalysis.recommendations, userProfile).summary,
+      suggestedFollowUps: [
+        'How can I reduce my dining expenses?',
+        'Should I save $700 toward my emergency fund?',
+        'Show me my budget breakdown',
+      ],
+      shouldProceed: true,
+      confidence: 'high',
+    };
   }
 
   private handleCheckGoalProgress(userProfile: UserProfile): FormattedResponse {
@@ -502,38 +561,87 @@ export class ChatHandler {
   }
 
   private async handleGeneralQuestion(
-    _message: string,
+    message: string,
     userProfile: UserProfile,
     _context: ConversationContext
   ): Promise<FormattedResponse> {
     // For general questions, provide helpful context and suggestions
     const healthAnalysis = analyzeFinancialHealth(userProfile);
     const goalSummaries = generateGoalSummary(userProfile);
-    
-    let response = "I'm here to help you make smart financial decisions. Here's a quick overview:\n\n";
-    
-    response += `**Your Financial Health:** ${healthAnalysis.overallHealth}\n`;
+
+    // Check if user is asking about spending/budget
+    const isAskingAboutSpending = /spend|budget|money|expense|cost|afford|save|cut|reduce/i.test(message);
+
+    let response = "I'm here to help you make smart financial decisions. Here's your financial overview:\n\n";
+
+    response += `**Financial Health:** ${healthAnalysis.overallHealth}\n`;
     response += `**Monthly Surplus:** $${healthAnalysis.monthlySurplus.toLocaleString()}\n`;
     response += `**Goals on Track:** ${goalSummaries.filter(g => g.status === 'on_track' || g.status === 'completed').length}/${goalSummaries.length}\n\n`;
-    
-    response += "Here are some things I can help with:\n";
+
+    // Add spending insights if user is asking about spending
+    if (isAskingAboutSpending) {
+      response += `**📊 Spending Analysis:**\n`;
+
+      // Find categories with high spending
+      const categoriesWithSpending = userProfile.spendingCategories
+        .filter(cat => cat.currentSpent > 0)
+        .map(cat => ({
+          ...cat,
+          percentUsed: cat.monthlyBudget > 0 ? (cat.currentSpent / cat.monthlyBudget * 100) : 0,
+          overspent: cat.currentSpent > cat.monthlyBudget,
+        }))
+        .sort((a, b) => b.percentUsed - a.percentUsed);
+
+      // Show top spending categories
+      categoriesWithSpending.slice(0, 3).forEach(cat => {
+        const emoji = cat.overspent ? '🔴' : cat.percentUsed > 70 ? '🟡' : '🟢';
+        response += `${emoji} **${cat.name}:** $${cat.currentSpent.toFixed(0)}/$${cat.monthlyBudget} (${cat.percentUsed.toFixed(0)}% used)\n`;
+
+        // Show recent transactions
+        const recentTxns = (cat.transactions || [])
+          .filter(t => t.type === 'expense')
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+          .slice(0, 2);
+
+        if (recentTxns.length > 0) {
+          response += `   Recent: ${recentTxns.map(t => `${t.description} ($${Math.abs(t.amount).toFixed(0)})`).join(', ')}\n`;
+        }
+      });
+
+      // Find overspending opportunities
+      const overspentCategories = categoriesWithSpending.filter(cat => cat.overspent || cat.percentUsed > 80);
+      if (overspentCategories.length > 0) {
+        response += `\n💡 **Opportunity:** You're spending heavily on ${overspentCategories.map(c => c.name).join(', ')}. `;
+        response += `Consider reducing spending in these areas to boost your savings.\n`;
+      }
+
+      response += '\n';
+    }
+
+    response += "**I can help you:**\n";
+    response += "• **Analyze spending:** 'Where am I spending too much?'\n";
     response += "• **Simulate actions:** 'Should I invest $500?'\n";
     response += "• **Compare options:** 'Save $500 vs invest $500'\n";
-    response += "• **Get recommendations:** 'What should I do?'\n";
+    response += "• **Get recommendations:** 'What should I do with my extra money?'\n";
     response += "• **Check progress:** 'How are my goals doing?'\n";
     response += "• **Move money:** 'Transfer $500 from checking to savings'\n";
     response += "• **Create goals:** 'I want to save for a vacation'\n";
     response += "• **Update budget:** 'Increase my dining budget to $300'\n";
-    
+
     return {
       message: response,
-      summary: 'Overview and help',
-      suggestedFollowUps: [
-        'What should I do with my extra money?',
-        'How are my goals progressing?',
-        'Transfer $500 from checking to savings',
-        'Create a goal for a new car',
-      ],
+      summary: 'Financial overview and insights',
+      suggestedFollowUps: isAskingAboutSpending
+        ? [
+            'How can I reduce my spending?',
+            'What should I do with my surplus?',
+            'Show me where I can save money',
+          ]
+        : [
+            'What should I do with my extra money?',
+            'Where am I spending too much?',
+            'How are my goals progressing?',
+          ],
       shouldProceed: true,
       confidence: 'high',
     };
@@ -915,9 +1023,9 @@ export class ChatHandler {
     const goalName = action.goalId
       ? userProfile.goals.find(g => g.id === action.goalId)?.name
       : null;
-    
+
     let message = '';
-    
+
     // Opening
     if (result.recommendation === 'proceed') {
       message = `Great news! ${action.type.charAt(0).toUpperCase() + action.type.slice(1)}ing $${action.amount.toLocaleString()}${goalName ? ` for ${goalName}` : ''} looks solid.\n\n`;
@@ -926,19 +1034,35 @@ export class ChatHandler {
     } else {
       message = `I'd recommend holding off on ${action.type}ing $${action.amount.toLocaleString()} right now.\n\n`;
     }
-    
+
     // Key insights
     message += `**Budget:** ${result.budget_assessment.monthly_impact}\n`;
     if (result.budget_assessment.key_concern) {
       message += `⚠️ ${result.budget_assessment.key_concern}\n`;
     }
     message += '\n';
-    
+
     if (action.type === 'invest') {
       message += `**Investment:** ${result.investment_assessment.projected_growth}\n`;
       message += `Risk alignment: ${result.investment_assessment.risk_alignment}\n\n`;
     }
-    
+
+    // Spending insights - NEW
+    if (result.spending_insights && (result.spending_insights.overspending_categories.length > 0 || result.spending_insights.opportunities_to_save)) {
+      message += `**📊 Spending Analysis:**\n`;
+      if (result.spending_insights.overspending_categories.length > 0) {
+        message += `High spending in: ${result.spending_insights.overspending_categories.join(', ')}\n`;
+      }
+      if (result.spending_insights.opportunities_to_save) {
+        message += `💡 ${result.spending_insights.opportunities_to_save}`;
+        if (result.spending_insights.estimated_monthly_savings) {
+          message += ` (save ~$${result.spending_insights.estimated_monthly_savings}/month)`;
+        }
+        message += '\n';
+      }
+      message += '\n';
+    }
+
     // Guardrails
     if (!result.guardrail_assessment.passes_all) {
       message += `**⚠️ Guardrail Violations:**\n`;
@@ -947,14 +1071,14 @@ export class ChatHandler {
       });
       message += '\n';
     }
-    
+
     // Recommendation
     message += `**My recommendation:** ${result.explanation}`;
-    
+
     if (result.suggested_alternative) {
       message += `\n\n💡 **Alternative:** ${result.suggested_alternative}`;
     }
-    
+
     return message;
   }
 }
