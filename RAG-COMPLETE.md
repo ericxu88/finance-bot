@@ -9,7 +9,7 @@ I have successfully implemented a full RAG (Retrieval-Augmented Generation) syst
 ### 1. **Vector Store Infrastructure** ✅
 - **File**: `backend/lib/rag/vector-store.ts`
 - In-memory vector database using LangChain's MemoryVectorStore
-- Google Generative AI Embeddings (model: embedding-001)
+- OpenAI Embeddings (model: text-embedding-3-small; set OPENAI_EMBEDDING_MODEL to override)
 - Collection-based organization for users and knowledge base
 - **Status**: ✅ Working, successfully indexed 9 documents in test
 
@@ -97,10 +97,7 @@ I have successfully implemented a full RAG (Retrieval-Augmented Generation) syst
 - TypeScript build: **No errors**
 
 ### ⚠️ API Rate Limit Hit:
-During testing, the Google Gemini embedding API hit its free tier quota:
-```
-Quota exceeded for metric: generativelanguage.googleapis.com/embed_content_free_tier_requests
-```
+RAG now uses OpenAI embeddings (no Gemini embedding quota required).
 
 **This is expected** - the system successfully indexed data and attempted retrieval. The architecture is sound; we just need to wait for quota refresh or use a different API key.
 
@@ -153,7 +150,7 @@ Installed with `--legacy-peer-deps` to handle `@langchain/core` version conflict
 ## 🔧 Configuration
 
 No additional config required beyond existing:
-- `GOOGLE_API_KEY` (already in `.env`) - used for both LLMs and embeddings
+- `OPENAI_API_KEY` (or `OPEN_AI_API_KEY`) - used for LLM agents and RAG embeddings
 - Knowledge base initializes automatically on server start
 - User history indexes automatically on first action per user
 
@@ -188,7 +185,7 @@ npm run build                    # Compiles TypeScript
 
 ### 2. Test RAG (when API quota available):
 ```bash
-GOOGLE_API_KEY=your_key node dist/scripts/test-rag.js
+OPENAI_API_KEY=your_key node dist/scripts/test-rag.js
 ```
 
 ### 3. Run the server:

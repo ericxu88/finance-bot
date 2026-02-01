@@ -130,9 +130,9 @@ npm install
 cp .env.example .env
 
 # Add your API keys:
-# - GOOGLE_API_KEY: For Gemini LLMs and embeddings (get at https://aistudio.google.com/apikey)
-# - OPENAI_API_KEY: Alternative LLM provider (optional)
-export GOOGLE_API_KEY=your_key_here
+# - OPENAI_API_KEY: For LLM agents and RAG embeddings (get at https://platform.openai.com/api-keys)
+# - GOOGLE_API_KEY: Optional, for Gemini (get at https://aistudio.google.com/apikey)
+export OPENAI_API_KEY=your_key_here
 ```
 
 ### Type Check
@@ -167,7 +167,7 @@ This builds the project and runs the full backend unit test suite:
 
 ```bash
 npm run build
-GOOGLE_API_KEY=your_key node dist/scripts/test-rag.js
+OPENAI_API_KEY=your_key node dist/scripts/test-rag.js
 ```
 
 Tests:
@@ -176,7 +176,7 @@ Tests:
 - Knowledge base initialization (16 financial principles)
 - Financial knowledge retrieval
 
-> **Note**: Requires valid Google API key with embedding quota available.
+> **Note**: RAG uses OpenAI embeddings (`text-embedding-3-small` by default; set `OPENAI_EMBEDDING_MODEL` to override).
 - **simulation-engine** – simulate_save, simulate_invest, compare_options, constraints
 
 The execute-api test starts the app on a random port (requires network permission in restricted environments).

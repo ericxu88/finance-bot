@@ -1,26 +1,27 @@
 /**
  * Vector Store Manager
- * Manages ChromaDB collections for RAG (Retrieval-Augmented Generation)
- * Uses in-memory mode for MVP (no persistence)
+ * Manages in-memory vector stores for RAG (Retrieval-Augmented Generation).
+ * Uses OpenAI embeddings for indexing and similarity search.
  */
 
-import { GoogleGenerativeAIEmbeddings } from '@langchain/google-genai';
+import { OpenAIEmbeddings } from '@langchain/openai';
 import { Document } from '@langchain/core/documents';
 import { MemoryVectorStore } from 'langchain/vectorstores/memory';
 
 export class VectorStoreManager {
-  private embeddings: GoogleGenerativeAIEmbeddings;
+  private embeddings: OpenAIEmbeddings;
   private stores: Map<string, MemoryVectorStore> = new Map();
 
   constructor() {
-    const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
+    const apiKey = process.env.OPEN_AI_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim();
     if (!apiKey) {
-      throw new Error('GOOGLE_API_KEY or GEMINI_API_KEY required for embeddings');
+      throw new Error('OPENAI_API_KEY (or OPEN_AI_API_KEY) required for RAG embeddings');
     }
 
-    this.embeddings = new GoogleGenerativeAIEmbeddings({
+    const modelName = process.env.OPENAI_EMBEDDING_MODEL?.trim() || 'text-embedding-3-small';
+    this.embeddings = new OpenAIEmbeddings({
       apiKey,
-      modelName: 'embedding-001', // Gemini's free embedding model
+      modelName,
     });
   }
 

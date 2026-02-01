@@ -8,7 +8,7 @@ A complete **Retrieval-Augmented Generation (RAG) system** that enhances the mul
 
 ### 1. Vector Store (`backend/lib/rag/vector-store.ts`)
 - **In-memory vector database** using LangChain's `MemoryVectorStore`
-- **Google Generative AI Embeddings** (model: `embedding-001`)
+- **OpenAI Embeddings** (model: `text-embedding-3-small`, configurable via `OPENAI_EMBEDDING_MODEL`)
 - **Collection-based organization** (separate collections for each user's history and shared knowledge base)
 - No external server required (suitable for MVP/demo)
 
@@ -80,7 +80,7 @@ Validates:
 - ✅ RAG-enhanced agents inherit correctly
 
 **Rate Limited**:
-- ⚠️ Google Gemini embedding API quota exceeded during testing
+- RAG embeddings use OpenAI (no Gemini embedding quota required)
 - System architecture is sound; quota just needs refresh
 
 ## How It Works (Flow)
