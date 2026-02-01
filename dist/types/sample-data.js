@@ -1,0 +1,611 @@
+export const sampleUserSarah = {
+    id: 'user_sarah_2026',
+    name: 'Sarah Chen',
+    monthlyIncome: 5416,
+    accounts: {
+        checking: 3200,
+        savings: 8500,
+        investments: {
+            taxable: {
+                balance: 2400,
+                allocation: { stocks: 85, bonds: 10, cash: 5 },
+            },
+            rothIRA: {
+                balance: 12000,
+                allocation: { stocks: 90, bonds: 10, cash: 0 },
+            },
+            traditional401k: {
+                balance: 28000,
+                allocation: { stocks: 70, bonds: 25, cash: 5 },
+            },
+        },
+    },
+    fixedExpenses: [
+        {
+            id: 'exp_rent',
+            name: 'Rent',
+            amount: 1850,
+            frequency: 'monthly',
+            dueDay: 1,
+        },
+        {
+            id: 'exp_car',
+            name: 'Car Payment',
+            amount: 320,
+            frequency: 'monthly',
+            dueDay: 15,
+        },
+        {
+            id: 'exp_insurance',
+            name: 'Car Insurance',
+            amount: 145,
+            frequency: 'monthly',
+            dueDay: 10,
+        },
+        {
+            id: 'exp_utilities',
+            name: 'Utilities (Avg)',
+            amount: 120,
+            frequency: 'monthly',
+        },
+        {
+            id: 'exp_phone',
+            name: 'Phone Bill',
+            amount: 65,
+            frequency: 'monthly',
+            dueDay: 20,
+        },
+    ],
+    spendingCategories: [
+        {
+            id: 'cat_groceries',
+            name: 'Groceries',
+            monthlyBudget: 400,
+            currentSpent: 287.43,
+            transactions: [
+                {
+                    id: 'txn_1',
+                    date: new Date('2026-01-05'),
+                    amount: -87.23,
+                    category: 'cat_groceries',
+                    description: 'Whole Foods',
+                    type: 'expense',
+                },
+                {
+                    id: 'txn_2',
+                    date: new Date('2026-01-12'),
+                    amount: -103.45,
+                    category: 'cat_groceries',
+                    description: 'Trader Joes',
+                    type: 'expense',
+                },
+                {
+                    id: 'txn_3',
+                    date: new Date('2026-01-19'),
+                    amount: -96.75,
+                    category: 'cat_groceries',
+                    description: 'Safeway',
+                    type: 'expense',
+                },
+            ],
+        },
+        {
+            id: 'cat_dining',
+            name: 'Dining Out',
+            monthlyBudget: 300,
+            currentSpent: 178.50,
+            transactions: [
+                {
+                    id: 'txn_4',
+                    date: new Date('2026-01-08'),
+                    amount: -45.30,
+                    category: 'cat_dining',
+                    description: 'Chipotle',
+                    type: 'expense',
+                },
+                {
+                    id: 'txn_5',
+                    date: new Date('2026-01-14'),
+                    amount: -67.20,
+                    category: 'cat_dining',
+                    description: 'Olive Garden',
+                    type: 'expense',
+                },
+                {
+                    id: 'txn_6',
+                    date: new Date('2026-01-22'),
+                    amount: -66.00,
+                    category: 'cat_dining',
+                    description: 'Local Sushi Bar',
+                    type: 'expense',
+                },
+            ],
+        },
+        {
+            id: 'cat_entertainment',
+            name: 'Entertainment',
+            monthlyBudget: 150,
+            currentSpent: 89.97,
+            transactions: [
+                {
+                    id: 'txn_7',
+                    date: new Date('2026-01-10'),
+                    amount: -15.99,
+                    category: 'cat_entertainment',
+                    description: 'Netflix',
+                    type: 'expense',
+                },
+                {
+                    id: 'txn_8',
+                    date: new Date('2026-01-18'),
+                    amount: -45.00,
+                    category: 'cat_entertainment',
+                    description: 'Concert Tickets',
+                    type: 'expense',
+                },
+                {
+                    id: 'txn_9',
+                    date: new Date('2026-01-25'),
+                    amount: -28.98,
+                    category: 'cat_entertainment',
+                    description: 'Movie Night',
+                    type: 'expense',
+                },
+            ],
+        },
+        {
+            id: 'cat_fitness',
+            name: 'Fitness',
+            monthlyBudget: 100,
+            currentSpent: 79.00,
+            transactions: [
+                {
+                    id: 'txn_10',
+                    date: new Date('2026-01-01'),
+                    amount: -79.00,
+                    category: 'cat_fitness',
+                    description: 'Gym Membership',
+                    type: 'expense',
+                },
+            ],
+        },
+        {
+            id: 'cat_shopping',
+            name: 'Shopping',
+            monthlyBudget: 200,
+            currentSpent: 134.67,
+            transactions: [
+                {
+                    id: 'txn_11',
+                    date: new Date('2026-01-15'),
+                    amount: -89.99,
+                    category: 'cat_shopping',
+                    description: 'Amazon - Work Clothes',
+                    type: 'expense',
+                },
+                {
+                    id: 'txn_12',
+                    date: new Date('2026-01-28'),
+                    amount: -44.68,
+                    category: 'cat_shopping',
+                    description: 'Target - Household Items',
+                    type: 'expense',
+                },
+            ],
+        },
+        {
+            id: 'cat_transportation',
+            name: 'Transportation',
+            monthlyBudget: 250,
+            currentSpent: 187.50,
+            transactions: [
+                {
+                    id: 'txn_13',
+                    date: new Date('2026-01-03'),
+                    amount: -55.00,
+                    category: 'cat_transportation',
+                    description: 'Shell Gas Station',
+                    type: 'expense',
+                },
+                {
+                    id: 'txn_14',
+                    date: new Date('2026-01-11'),
+                    amount: -48.75,
+                    category: 'cat_transportation',
+                    description: 'Chevron',
+                    type: 'expense',
+                },
+                {
+                    id: 'txn_15',
+                    date: new Date('2026-01-20'),
+                    amount: -52.25,
+                    category: 'cat_transportation',
+                    description: 'BP Gas',
+                    type: 'expense',
+                },
+                {
+                    id: 'txn_16',
+                    date: new Date('2026-01-27'),
+                    amount: -31.50,
+                    category: 'cat_transportation',
+                    description: 'Uber',
+                    type: 'expense',
+                },
+            ],
+        },
+        {
+            id: 'cat_utilities',
+            name: 'Utilities & Bills',
+            monthlyBudget: 200,
+            currentSpent: 165.43,
+            transactions: [
+                {
+                    id: 'txn_17',
+                    date: new Date('2026-01-05'),
+                    amount: -89.32,
+                    category: 'cat_utilities',
+                    description: 'PG&E Electric',
+                    type: 'expense',
+                },
+                {
+                    id: 'txn_18',
+                    date: new Date('2026-01-10'),
+                    amount: -45.67,
+                    category: 'cat_utilities',
+                    description: 'Water Bill',
+                    type: 'expense',
+                },
+                {
+                    id: 'txn_19',
+                    date: new Date('2026-01-15'),
+                    amount: -30.44,
+                    category: 'cat_utilities',
+                    description: 'Internet - Comcast',
+                    type: 'expense',
+                },
+            ],
+        },
+        {
+            id: 'cat_income',
+            name: 'Income',
+            monthlyBudget: 0,
+            currentSpent: -5416.00,
+            transactions: [
+                {
+                    id: 'txn_20',
+                    date: new Date('2026-01-01'),
+                    amount: 2708.00,
+                    category: 'cat_income',
+                    description: 'Paycheck - Tech Corp',
+                    type: 'income',
+                },
+                {
+                    id: 'txn_21',
+                    date: new Date('2026-01-15'),
+                    amount: 2708.00,
+                    category: 'cat_income',
+                    description: 'Paycheck - Tech Corp',
+                    type: 'income',
+                },
+            ],
+        },
+        {
+            id: 'cat_transfers',
+            name: 'Transfers & Savings',
+            monthlyBudget: 0,
+            currentSpent: 0,
+            transactions: [
+                {
+                    id: 'txn_22',
+                    date: new Date('2026-01-02'),
+                    amount: -500.00,
+                    category: 'cat_transfers',
+                    description: 'Transfer to Savings',
+                    type: 'transfer',
+                },
+                {
+                    id: 'txn_23',
+                    date: new Date('2026-01-16'),
+                    amount: -300.00,
+                    category: 'cat_transfers',
+                    description: 'Roth IRA Contribution',
+                    type: 'transfer',
+                },
+                {
+                    id: 'txn_24',
+                    date: new Date('2026-01-07'),
+                    amount: -200.00,
+                    category: 'cat_transfers',
+                    description: 'Transfer to Vacation Fund',
+                    type: 'transfer',
+                },
+            ],
+        },
+        {
+            id: 'cat_healthcare',
+            name: 'Healthcare',
+            monthlyBudget: 150,
+            currentSpent: 85.00,
+            transactions: [
+                {
+                    id: 'txn_25',
+                    date: new Date('2026-01-12'),
+                    amount: -25.00,
+                    category: 'cat_healthcare',
+                    description: 'CVS Pharmacy',
+                    type: 'expense',
+                },
+                {
+                    id: 'txn_26',
+                    date: new Date('2026-01-21'),
+                    amount: -60.00,
+                    category: 'cat_healthcare',
+                    description: 'Doctor Copay',
+                    type: 'expense',
+                },
+            ],
+        },
+    ],
+    goals: [
+        {
+            id: 'goal_emergency',
+            name: 'Emergency Fund',
+            targetAmount: 15000,
+            currentAmount: 8500,
+            deadline: new Date('2026-12-31'),
+            priority: 1,
+            timeHorizon: 'short',
+            linkedAccountIds: ['savings'],
+        },
+        {
+            id: 'goal_house',
+            name: 'House Down Payment',
+            targetAmount: 60000,
+            currentAmount: 14400,
+            deadline: new Date('2029-06-01'),
+            priority: 2,
+            timeHorizon: 'long',
+            linkedAccountIds: ['savings', 'taxable'],
+        },
+        {
+            id: 'goal_retirement',
+            name: 'Retirement Savings',
+            targetAmount: 1000000,
+            currentAmount: 40000,
+            deadline: new Date('2061-01-01'),
+            priority: 3,
+            timeHorizon: 'long',
+            linkedAccountIds: ['rothIRA', 'traditional401k'],
+        },
+        {
+            id: 'goal_vacation',
+            name: 'Europe Trip',
+            targetAmount: 5000,
+            currentAmount: 1200,
+            deadline: new Date('2026-09-01'),
+            priority: 4,
+            timeHorizon: 'short',
+            linkedAccountIds: ['savings'],
+        },
+    ],
+    preferences: {
+        riskTolerance: 'moderate',
+        liquidityPreference: 'medium',
+        guardrails: [
+            {
+                id: 'guard_checking_min',
+                rule: 'Never let checking account drop below $1,000',
+                type: 'min_balance',
+                accountId: 'checking',
+                threshold: 1000,
+            },
+            {
+                id: 'guard_emergency_protected',
+                rule: 'Keep emergency fund in savings, not investments',
+                type: 'protected_account',
+                accountId: 'savings',
+            },
+            {
+                id: 'guard_max_investment',
+                rule: 'Never invest more than 30% of liquid assets at once',
+                type: 'max_investment_pct',
+                threshold: 0.30,
+            },
+        ],
+    },
+    createdAt: new Date('2025-12-15'),
+    updatedAt: new Date('2026-01-31'),
+};
+export const sampleAction = {
+    type: 'invest',
+    amount: 500,
+    targetAccountId: 'rothIRA',
+    goalId: 'goal_retirement',
+};
+export const sampleSimulationResult = {
+    action: sampleAction,
+    scenarioIfDo: {
+        accountsAfter: {
+            checking: 2700,
+            savings: 8500,
+            investments: {
+                taxable: {
+                    balance: 2400,
+                    allocation: { stocks: 85, bonds: 10, cash: 5 },
+                },
+                rothIRA: {
+                    balance: 12500,
+                    allocation: { stocks: 90, bonds: 10, cash: 0 },
+                },
+                traditional401k: {
+                    balance: 28000,
+                    allocation: { stocks: 70, bonds: 25, cash: 5 },
+                },
+            },
+        },
+        goalImpacts: [
+            {
+                goalId: 'goal_retirement',
+                goalName: 'Retirement Savings',
+                progressChangePct: 0.05,
+                timeToGoalBefore: 420,
+                timeToGoalAfter: 417,
+                timeSaved: 3,
+                futureValue: 3847,
+            },
+            {
+                goalId: 'goal_emergency',
+                goalName: 'Emergency Fund',
+                progressChangePct: 0,
+                timeToGoalBefore: 8,
+                timeToGoalAfter: 8,
+                timeSaved: 0,
+            },
+        ],
+        budgetImpacts: [
+            {
+                categoryId: 'cat_groceries',
+                categoryName: 'Groceries',
+                percentUsed: 71.86,
+                amountRemaining: 112.57,
+                status: 'good',
+            },
+            {
+                categoryId: 'cat_dining',
+                categoryName: 'Dining Out',
+                percentUsed: 59.50,
+                amountRemaining: 121.50,
+                status: 'good',
+            },
+        ],
+        liquidityImpact: 'Moderate decrease in liquidity. Checking drops to $2,700, still above minimum threshold.',
+        riskImpact: 'Slight increase in risk exposure. Investment represents 8.5% of liquid assets, within comfortable range.',
+        timelineChanges: [
+            'Retirement goal accelerated by ~3 months due to compound growth',
+            'Checking balance reduced but remains healthy',
+        ],
+    },
+    scenarioIfDont: {
+        accountsAfter: {
+            checking: 3200,
+            savings: 8500,
+            investments: {
+                taxable: {
+                    balance: 2400,
+                    allocation: { stocks: 85, bonds: 10, cash: 5 },
+                },
+                rothIRA: {
+                    balance: 12000,
+                    allocation: { stocks: 90, bonds: 10, cash: 0 },
+                },
+                traditional401k: {
+                    balance: 28000,
+                    allocation: { stocks: 70, bonds: 25, cash: 5 },
+                },
+            },
+        },
+        goalImpacts: [
+            {
+                goalId: 'goal_retirement',
+                goalName: 'Retirement Savings',
+                progressChangePct: 0,
+                timeToGoalBefore: 420,
+                timeToGoalAfter: 420,
+                timeSaved: 0,
+            },
+            {
+                goalId: 'goal_emergency',
+                goalName: 'Emergency Fund',
+                progressChangePct: 0,
+                timeToGoalBefore: 8,
+                timeToGoalAfter: 8,
+                timeSaved: 0,
+            },
+        ],
+        budgetImpacts: [
+            {
+                categoryId: 'cat_groceries',
+                categoryName: 'Groceries',
+                percentUsed: 71.86,
+                amountRemaining: 112.57,
+                status: 'good',
+            },
+            {
+                categoryId: 'cat_dining',
+                categoryName: 'Dining Out',
+                percentUsed: 59.50,
+                amountRemaining: 121.50,
+                status: 'good',
+            },
+        ],
+        liquidityImpact: 'No change. Maintains current liquidity position.',
+        riskImpact: 'No change. Current risk exposure maintained.',
+        timelineChanges: [],
+    },
+    confidence: 'high',
+    reasoning: `Investing $500 in your Roth IRA is a solid move because:
+
+1. **Tax Advantage**: Roth IRA contributions grow tax-free, maximizing long-term returns
+2. **Time Value**: At 28, you have 35+ years for compound growth ($500 → ~$3,847)
+3. **Liquidity Safe**: You'll still have $2,700 in checking, above your $1,000 minimum
+4. **Goal Alignment**: Directly supports retirement goal (Priority 3)
+5. **Risk Appropriate**: Moderate risk matches your profile; represents 8.5% of liquid assets
+
+The main tradeoff is reduced short-term liquidity, but your emergency fund ($8,500) remains intact and checking stays healthy.`,
+    validationResult: {
+        passed: true,
+        constraintViolations: [],
+        contradictions: [],
+        uncertaintySources: [
+            'Future market returns assumed at 7% historical average',
+            'Assumes no major life changes in next 3 months',
+        ],
+        overallConfidence: 'high',
+    },
+};
+export const sampleComparisonOptions = [
+    {
+        label: 'Invest $500 in Roth IRA',
+        result: sampleSimulationResult,
+    },
+    {
+        label: 'Save $500 to Emergency Fund',
+        result: {
+            ...sampleSimulationResult,
+            action: {
+                type: 'save',
+                amount: 500,
+                targetAccountId: 'savings',
+                goalId: 'goal_emergency',
+            },
+            confidence: 'high',
+            reasoning: 'Saving to emergency fund reduces financial stress and builds safety net. High priority goal.',
+        },
+    },
+    {
+        label: 'Spend $500 on Europe Trip Fund',
+        result: {
+            ...sampleSimulationResult,
+            action: {
+                type: 'save',
+                amount: 500,
+                targetAccountId: 'savings',
+                goalId: 'goal_vacation',
+            },
+            confidence: 'medium',
+            reasoning: 'Vacation goal is lower priority. Consider focusing on emergency fund first.',
+        },
+    },
+];
+export const sampleFinancialState = {
+    user: sampleUserSarah,
+    timestamp: new Date('2026-01-31T10:30:00Z'),
+};
+export const samples = {
+    user: sampleUserSarah,
+    action: sampleAction,
+    simulationResult: sampleSimulationResult,
+    comparisonOptions: sampleComparisonOptions,
+    financialState: sampleFinancialState,
+};
+//# sourceMappingURL=sample-data.js.map

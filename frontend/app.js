@@ -825,13 +825,15 @@ async function loadBudget() {
       `;
     }).join('');
 
-    // Update budget ring with totals
-    const totalBudget = categories.reduce((sum, cat) => sum + cat.monthlyBudget, 0);
-    const totalSpent = categories.reduce((sum, cat) => sum + cat.currentSpent, 0);
+    // Update budget ring with totals (exclude Income from budget total)
+    const spendingOnly = categories.filter(c => !c.name.toLowerCase().includes('income'));
+    const totalBudget = spendingOnly.reduce((sum, cat) => sum + cat.monthlyBudget, 0);
+    const totalSpent = spendingOnly.reduce((sum, cat) => sum + cat.currentSpent, 0);
     updateBudgetRing({ analysis: { totalBudget, totalSpent } });
 
-    // Initialize spending chart
-    initializeSpendingChart(categories);
+    // Initialize spending chart (exclude Income from spending; show Income as separate positive bar)
+    const monthlyIncome = currentUserProfile?.monthlyIncome ?? 0;
+    initializeSpendingChart(categories, monthlyIncome);
 
     // Also load underspending and upcoming expenses data
     await Promise.all([
@@ -1879,8 +1881,9 @@ function initializeGoalsChart(goals) {
 
 /**
  * Initialize spending trends chart
+ * Excludes Income from spending bars; shows Income as a separate positive bar.
  */
-function initializeSpendingChart(categories) {
+function initializeSpendingChart(categories, monthlyIncome) {
   const canvas = document.getElementById('spending-chart');
   if (!canvas) return;
 
@@ -1891,38 +1894,76 @@ function initializeSpendingChart(categories) {
     spendingChart.destroy();
   }
 
-  // Prepare data
-  const labels = categories.map(c => c.name);
-  const spent = categories.map(c => c.currentSpent);
-  const budget = categories.map(c => c.monthlyBudget);
+  // Exclude Income from spending trend (it's not a spending category)
+  const spendingCategories = categories.filter(c => !c.name.toLowerCase().includes('income'));
 
-  // Color categories based on status
-  const backgroundColors = categories.map(c => {
-    const percent = (c.currentSpent / c.monthlyBudget) * 100;
+  // Labels: spending categories + Income at the end
+  const labels = spendingCategories.map(c => c.name);
+  if (monthlyIncome > 0) {
+    labels.push('Income');
+  }
+
+  const n = labels.length;
+  const spent = spendingCategories.map(c => Math.max(0, c.currentSpent)); // use only positive (spending)
+  const budget = spendingCategories.map(c => c.monthlyBudget);
+
+  // Pad for Income bar (no "spent" or "budget" for Income)
+  if (monthlyIncome > 0) {
+    spent.push(0);
+    budget.push(0);
+  }
+
+  // Spent bar colors: status colors for spending; transparent for Income (Spent has 0 there)
+  const spentColors = spendingCategories.map(c => {
+    const percent = c.monthlyBudget > 0 ? (Math.max(0, c.currentSpent) / c.monthlyBudget) * 100 : 0;
     if (percent > 100) return 'rgba(239, 68, 68, 0.8)'; // danger
     if (percent > 80) return 'rgba(245, 158, 11, 0.8)'; // warning
     return 'rgba(34, 197, 94, 0.8)'; // success
   });
+  if (monthlyIncome > 0) {
+    spentColors.push('rgba(0, 0, 0, 0)'); // no visible bar for Spent at Income slot
+  }
+
+  // Budget bar: gray for spending; transparent for Income slot
+  const budgetColors = labels.map((_, i) =>
+    i < spendingCategories.length ? 'rgba(229, 231, 235, 0.5)' : 'rgba(0, 0, 0, 0)'
+  );
+
+  // Income dataset: only when we have income; one positive bar at the end
+  const incomeData = monthlyIncome > 0
+    ? labels.map((_, i) => (i === n - 1 ? monthlyIncome : 0))
+    : null;
+  const datasets = [
+    {
+      label: 'Spent',
+      data: spent,
+      backgroundColor: spentColors,
+      borderWidth: 0,
+    },
+    {
+      label: 'Budget',
+      data: budget,
+      backgroundColor: budgetColors,
+      borderColor: 'rgba(229, 231, 235, 1)',
+      borderWidth: 1,
+    },
+  ];
+  if (incomeData) {
+    datasets.push({
+      label: 'Income',
+      data: incomeData,
+      backgroundColor: labels.map((_, i) =>
+        i === n - 1 ? 'rgba(59, 130, 246, 0.8)' : 'rgba(0, 0, 0, 0)'
+      ),
+      borderWidth: 0,
+    });
+  }
 
   spendingChart = new Chart(ctx, {
     type: 'bar',
     data: {
       labels: labels,
-      datasets: [
-        {
-          label: 'Spent',
-          data: spent,
-          backgroundColor: backgroundColors,
-          borderWidth: 0,
-        },
-        {
-          label: 'Budget',
-          data: budget,
-          backgroundColor: 'rgba(229, 231, 235, 0.5)',
-          borderColor: 'rgba(229, 231, 235, 1)',
-          borderWidth: 1,
-        },
-      ],
+      datasets: datasets,
     },
     options: {
       responsive: true,
@@ -1936,8 +1977,14 @@ function initializeSpendingChart(categories) {
           callbacks: {
             label: function(context) {
               const value = context.parsed.y;
-              const total = categories[context.dataIndex].monthlyBudget;
-              const percent = ((value / total) * 100).toFixed(1);
+              if (context.dataset.label === 'Income') {
+                if (value === 0) return null;
+                return 'Income: $' + value.toLocaleString('en-US', { minimumFractionDigits: 2 });
+              }
+              if (context.dataIndex >= spendingCategories.length) return null; // Income bar slot
+              const cat = spendingCategories[context.dataIndex];
+              if (!cat || cat.monthlyBudget === 0) return context.dataset.label + ': $' + value.toFixed(2);
+              const percent = ((value / cat.monthlyBudget) * 100).toFixed(1);
               return context.dataset.label + ': $' + value.toFixed(2) + ' (' + percent + '%)';
             },
           },

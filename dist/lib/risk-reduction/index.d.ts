@@ -1,0 +1,2 @@
+export { runRiskReduction, calculateRiskScore, detectRiskFactors, type RiskReductionResult, type RiskScore, type RiskFactor, type RiskReductionAction, } from './risk-reduction-handler.js';
+//# sourceMappingURL=index.d.ts.map
